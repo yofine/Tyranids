@@ -8,9 +8,9 @@
 // Re-export all core components
 export * from './types.js';
 export { PheromonePool } from './pheromone-pool.js';
-// export * from './swarm-agent.js';
+export { SwarmAgent, type SwarmAgentConfig } from './swarm-agent.js';
+export { Evaluator } from './evaluator.js';
 // export * from './orchestrator.js';
-// export * from './evaluator.js';
 // export * from './observer.js';
 
 // Version
