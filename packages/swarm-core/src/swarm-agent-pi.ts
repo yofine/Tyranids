@@ -9,7 +9,7 @@
  * Inspired by Tyranid bio-forms - simple units, emergent intelligence
  */
 
-import {getModel,complete,type Context,type Model} from '@mariozechner/pi-ai';
+import { getModel, complete, type Context, type Model, type Api } from '@mariozechner/pi-ai';
 import { Agent } from '@mariozechner/pi-agent-core';
 import type {
   CodingTask,
@@ -43,7 +43,7 @@ export class SwarmAgentPi extends Agent {
   private evaluator: Evaluator;
   private agentState: AgentState;
   private shouldStop: boolean = false;
-  private model: Model;
+  private model: Model<Api>;
 
   // Behavioral parameters
   private exploitationRate: number = 0.6; // 60% follow best
@@ -62,7 +62,7 @@ export class SwarmAgentPi extends Agent {
     // 使用 pi-ai 的 getModel
     const provider = config.provider || 'anthropic';
     const modelName = config.modelName || 'claude-haiku-4-5-20241022';
-    this.model = getModel(provider, modelName);
+    this.model = getModel(provider as any, modelName as any) as Model<Api>;
   }
 
   /**
@@ -177,12 +177,13 @@ export class SwarmAgentPi extends Agent {
   private async refineCode(base: CodeFragment): Promise<CodeFragment> {
     const prompt = this.buildRefinePrompt(base);
 
-    // 创建 Context
+    // 创建 Context (符合 Pi API 规范)
     const context: Context = {
       messages: [
         {
           role: 'user',
           content: prompt,
+          timestamp: Date.now(),
         },
       ],
     };
@@ -190,7 +191,8 @@ export class SwarmAgentPi extends Agent {
     // 使用 pi-ai 的 complete() 函数
     const response = await complete(this.model, context);
 
-    const code = this.extractCode(response.content);
+    // 从 response.content 提取文本
+    const code = this.extractCodeFromResponse(response.content);
 
     return {
       filePath: base.filePath,
@@ -210,19 +212,46 @@ export class SwarmAgentPi extends Agent {
         {
           role: 'user',
           content: prompt,
+          timestamp: Date.now(),
         },
       ],
     };
 
     const response = await complete(this.model, context);
 
-    const code = this.extractCode(response.content);
+    const code = this.extractCodeFromResponse(response.content);
 
     return {
       filePath: this.task.filePath,
       content: code,
       intent: this.task.description,
     };
+  }
+
+  /**
+   * Extract code from Pi response content
+   *
+   * response.content is an array of TextContent | ThinkingContent | ToolCall
+   */
+  private extractCodeFromResponse(
+    content: Array<{ type: string; text?: string; thinking?: string }>
+  ): string {
+    // 提取所有文本内容
+    const textParts: string[] = [];
+
+    for (const item of content) {
+      if (item.type === 'text' && item.text) {
+        textParts.push(item.text);
+      } else if (item.type === 'thinking' && item.thinking) {
+        // 思考内容通常不包含代码,但也收集起来
+        textParts.push(item.thinking);
+      }
+    }
+
+    const fullText = textParts.join('\n');
+
+    // 提取代码块
+    return this.extractCode(fullText);
   }
 
   /**
