@@ -14,6 +14,11 @@ export {
   SwarmOrchestrator,
   type SwarmOrchestratorConfig,
 } from './orchestrator.js';
+export {
+  SwarmOrchestratorPi,
+  type SwarmOrchestratorPiConfig,
+} from './orchestrator-pi.js';
+export { SwarmAgentPi, type SwarmAgentPiConfig } from './swarm-agent-pi.js';
 export { SwarmObserver } from './observer.js';
 
 // Version

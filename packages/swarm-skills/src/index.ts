@@ -9,6 +9,7 @@
 export * from './skill-handlers.js';
 // export * from './tyranid-bioengine.js';
 export * from './swarm-runtime.js';
+export * from './swarm-runtime-pi.js';
 
 // Version
 export const VERSION = '0.1.0';

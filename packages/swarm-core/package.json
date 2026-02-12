@@ -24,7 +24,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.30.0"
+    "@anthropic-ai/sdk": "^0.30.0",
+    "@mariozechner/pi-agent-core": "^0.52.9",
+    "@mariozechner/pi-ai": "^0.52.9"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
