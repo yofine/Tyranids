@@ -8,6 +8,7 @@
     "clean": "rm -rf dist generated/*.ts generated/*.json",
     "build": "tsc --build",
     "test-swarm": "npm run build && node dist/run-swarm.js",
+    "test-swarm-minimax": "npm run build && node dist/run-swarm-minimax.js",
     "demo-bioengine": "npm run build && node dist/demo-bioengine.js"
   },
   "dependencies": {
