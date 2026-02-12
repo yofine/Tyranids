@@ -10,7 +10,10 @@ export * from './types.js';
 export { PheromonePool } from './pheromone-pool.js';
 export { SwarmAgent, type SwarmAgentConfig } from './swarm-agent.js';
 export { Evaluator } from './evaluator.js';
-// export * from './orchestrator.js';
+export {
+  SwarmOrchestrator,
+  type SwarmOrchestratorConfig,
+} from './orchestrator.js';
 // export * from './observer.js';
 
 // Version
