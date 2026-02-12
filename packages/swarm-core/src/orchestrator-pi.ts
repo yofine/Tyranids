@@ -18,6 +18,7 @@ import type { CodingTask, Pheromone, SwarmConfig } from './types.js';
 import { PheromonePool } from './pheromone-pool.js';
 import { SwarmAgentPi } from './swarm-agent-pi.js';
 import { SwarmObserver } from './observer.js';
+import { TyranidBioEngine } from './bioengine/index.js';
 
 export interface SwarmOrchestratorPiConfig {
   /** Swarm configuration */
@@ -26,6 +27,8 @@ export interface SwarmOrchestratorPiConfig {
   task: CodingTask;
   /** Provider to use */
   provider?: 'anthropic' | 'openai' | 'google';
+  /** Enable bioengine evolution (default: true) */
+  enableEvolution?: boolean;
 }
 
 export class SwarmOrchestratorPi {
@@ -35,13 +38,17 @@ export class SwarmOrchestratorPi {
   private task: CodingTask;
   private provider: 'anthropic' | 'openai' | 'google';
   public observer: SwarmObserver;
+  private bioEngine: TyranidBioEngine;
+  private enableEvolution: boolean;
 
   constructor(params: SwarmOrchestratorPiConfig) {
     this.config = params.config;
     this.task = params.task;
     this.provider = params.provider || 'anthropic';
+    this.enableEvolution = params.enableEvolution ?? true; // 默认启用进化
     this.pheromonePool = new PheromonePool();
     this.observer = new SwarmObserver(params.config.agentCount);
+    this.bioEngine = new TyranidBioEngine();
   }
 
   /**
@@ -91,6 +98,19 @@ export class SwarmOrchestratorPi {
     // 9. 显示报告和可视化
     console.log('\n' + this.observer.generateReport());
     this.observer.visualizePheromoneEvolution();
+
+    // 10. 记录执行到基因库 (用于进化)
+    if (this.enableEvolution) {
+      try {
+        await this.bioEngine.recordExecution(
+          this.task,
+          this.config,
+          this.observer.getMetrics()
+        );
+      } catch (error) {
+        console.error('⚠️  记录执行到基因库失败:', error);
+      }
+    }
 
     return topSolutions;
   }
@@ -196,5 +216,28 @@ export class SwarmOrchestratorPi {
    */
   getAgents(): SwarmAgentPi[] {
     return this.agents;
+  }
+
+  /**
+   * Get the bioengine (for evolution control)
+   */
+  getBioEngine(): TyranidBioEngine {
+    return this.bioEngine;
+  }
+
+  /**
+   * 加载进化后的配置 (静态方法,用于创建编排器前)
+   */
+  static async loadEvolvedConfig(
+    taskType: string
+  ): Promise<SwarmConfig | null> {
+    const bioEngine = new TyranidBioEngine();
+    const taskTypeEnum = taskType as
+      | 'add-feature'
+      | 'refactor'
+      | 'bugfix'
+      | 'optimize'
+      | 'unknown';
+    return await bioEngine.loadEvolvedConfig(taskTypeEnum);
   }
 }

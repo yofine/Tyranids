@@ -21,5 +21,8 @@ export {
 export { SwarmAgentPi, type SwarmAgentPiConfig } from './swarm-agent-pi.js';
 export { SwarmObserver } from './observer.js';
 
+// Bioengine - Gene Devouring & Evolution System
+export * from './bioengine/index.js';
+
 // Version
 export const VERSION = '0.1.0';

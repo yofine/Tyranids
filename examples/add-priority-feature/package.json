@@ -7,7 +7,8 @@
   "scripts": {
     "clean": "rm -rf dist generated/*.ts generated/*.json",
     "build": "tsc --build",
-    "test-swarm": "npm run build && node dist/run-swarm.js"
+    "test-swarm": "npm run build && node dist/run-swarm.js",
+    "demo-bioengine": "npm run build && node dist/demo-bioengine.js"
   },
   "dependencies": {
     "@tyranids/swarm-core": "^0.1.0"
