@@ -13,6 +13,7 @@
 import type { CodingTask, Pheromone, SwarmConfig } from './types.js';
 import { PheromonePool } from './pheromone-pool.js';
 import { SwarmAgent, type SwarmAgentConfig } from './swarm-agent.js';
+import { SwarmObserver } from './observer.js';
 import Anthropic from '@anthropic-ai/sdk';
 
 export interface SwarmOrchestratorConfig {
@@ -30,12 +31,14 @@ export class SwarmOrchestrator {
   private config: SwarmConfig;
   private llm: Anthropic;
   private task: CodingTask;
+  public observer: SwarmObserver;
 
   constructor(params: SwarmOrchestratorConfig) {
     this.config = params.config;
     this.llm = params.llm;
     this.task = params.task;
     this.pheromonePool = new PheromonePool();
+    this.observer = new SwarmObserver(params.config.agentCount);
   }
 
   /**
@@ -48,6 +51,9 @@ export class SwarmOrchestrator {
     console.log(`📋 任务: ${this.task.description}`);
     console.log(`📄 文件: ${this.task.filePath}`);
     console.log(`👥 规模: ${this.config.agentCount} agents\n`);
+
+    // 启动观测
+    this.observer.start();
 
     // 1. 生成虫群
     this.spawnAgents();
@@ -66,12 +72,22 @@ export class SwarmOrchestrator {
     // 5. 停止所有 agents
     this.stopAllAgents();
 
-    // 6. 提取最佳方案
+    // 6. 记录最终方案
+    this.observer.recordSolutions(this.pheromonePool);
+
+    // 7. 停止观测
+    this.observer.stop();
+
+    // 8. 提取最佳方案
     const topSolutions = this.pheromonePool.getTop(3);
 
     console.log(`\n✅ 虫群执行完成`);
     console.log(`📊 发现 ${this.pheromonePool.size()} 个方案`);
     console.log(`🏆 Top-3 质量: [${topSolutions.map((p) => p.quality.toFixed(2)).join(', ')}]`);
+
+    // 9. 显示报告和可视化
+    console.log('\n' + this.observer.generateReport());
+    this.observer.visualizePheromoneEvolution();
 
     return topSolutions;
   }
@@ -123,6 +139,9 @@ export class SwarmOrchestrator {
       const convergence = this.pheromonePool.calculateConvergence();
       const topPheromones = this.pheromonePool.getTop(3);
 
+      // 记录信息素快照
+      await this.observer.recordPheromoneSnapshot(iteration, this.pheromonePool);
+
       if (topPheromones.length > 0) {
         const topQuality = topPheromones[0].quality;
 
@@ -136,12 +155,14 @@ export class SwarmOrchestrator {
             `\n🎯 检测到收敛 (${(convergence * 100).toFixed(0)}% >= ${(this.config.convergenceThreshold * 100).toFixed(0)}%)`
           );
           console.log(`📍 第 ${iteration} 轮达到收敛`);
+          this.observer.recordConvergence(iteration, convergence);
           return;
         }
 
         // 早期停止: 已有高质量方案且多数 agents 支持
         if (topQuality > 0.95 && convergence > 0.6) {
           console.log(`\n⚡ 提前收敛: 发现高质量方案 (质量=${topQuality.toFixed(2)})`);
+          this.observer.recordConvergence(iteration, convergence);
           return;
         }
       }

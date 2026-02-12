@@ -117,3 +117,74 @@ export interface EvaluationMetrics {
   /** Overall quality score (0-1) */
   quality: number;
 }
+
+/**
+ * Agent action statistics
+ */
+export interface AgentActionStats {
+  explores: number;
+  refines: number;
+  validates: number;
+  idles: number;
+}
+
+/**
+ * Pheromone evolution snapshot at a specific iteration
+ */
+export interface PheromoneSnapshot {
+  iteration: number;
+  topQuality: number;
+  avgQuality: number;
+  diversity: number;
+  convergence: number;
+  timestamp: number;
+}
+
+/**
+ * LLM usage statistics
+ */
+export interface LLMStats {
+  total: number;
+  byModel: { [model: string]: number };
+  inputTokens: number;
+  outputTokens: number;
+  estimatedCost: number;
+}
+
+/**
+ * Solution summary for reporting
+ */
+export interface SolutionSummary {
+  id: string;
+  quality: number;
+  depositors: string[];
+  compilationSuccess: boolean;
+  timestamp: number;
+}
+
+/**
+ * Comprehensive swarm execution metrics
+ */
+export interface SwarmMetrics {
+  // Time metrics
+  startTime: number;
+  endTime: number;
+  duration: number;
+
+  // Agent behavior
+  agentActions: { [agentId: string]: AgentActionStats };
+
+  // Pheromone evolution
+  pheromoneEvolution: PheromoneSnapshot[];
+
+  // LLM usage
+  llmCalls: LLMStats;
+
+  // Solutions
+  solutions: SolutionSummary[];
+
+  // Convergence
+  convergenceDetected: boolean;
+  convergenceIteration: number;
+  finalConvergenceRatio: number;
+}
