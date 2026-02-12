@@ -5,10 +5,15 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "clean": "rm -rf dist",
-    "build": "tsc --build"
+    "clean": "rm -rf dist generated/*.ts generated/*.json",
+    "build": "tsc --build",
+    "test-swarm": "npm run build && node dist/run-swarm.js"
+  },
+  "dependencies": {
+    "@tyranids/swarm-core": "^0.1.0"
   },
   "devDependencies": {
+    "@types/node": "^20.0.0",
     "typescript": "^5.9.2"
   }
 }
