@@ -1,0 +1,8 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/swarm-core" },
+    { "path": "packages/swarm-skills" },
+    { "path": "examples/add-priority-feature" }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "name": "tyranids-monorepo",
+  "version": "0.1.0",
+  "description": "Tyranids - A swarm intelligence coding agent system inspired by Warhammer 40k Tyranids",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "clean": "npm run clean --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "check": "biome check .",
+    "format": "biome format --write ."
+  },
+  "keywords": [
+    "swarm-intelligence",
+    "ai-agents",
+    "code-generation",
+    "tyranids",
+    "multi-agent",
+    "llm"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.9.2"
+  }
+}

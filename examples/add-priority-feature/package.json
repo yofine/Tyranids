@@ -1,0 +1,14 @@
+{
+  "name": "add-priority-feature-example",
+  "version": "0.1.0",
+  "description": "Example: Adding priority feature to TODO app using Tyranids swarm",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsc --build"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}

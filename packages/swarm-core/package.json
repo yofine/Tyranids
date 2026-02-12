@@ -1,0 +1,33 @@
+{
+  "name": "@tyranids/swarm-core",
+  "version": "0.1.0",
+  "description": "Core swarm intelligence engine for Tyranids - pheromone pool, agents, and orchestration",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./types": "./dist/types.js"
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsc --build",
+    "dev": "tsc --build --watch",
+    "test": "node --test dist/**/*.test.js"
+  },
+  "keywords": [
+    "swarm",
+    "pheromone",
+    "agent",
+    "orchestrator"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.9.2"
+  }
+}
