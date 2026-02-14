@@ -36,7 +36,7 @@ export {
   EnvironmentOrchestrator,
   type EnvironmentOrchestratorConfig,
 } from './environment-orchestrator.js';
-export { createTypeScriptCompileFn } from './evaluator.js';
+export { createTypeScriptCompileFn, createPassthroughValidateFn } from './evaluator.js';
 
 // Synaptic Memory - Filesystem persistence & agent memory
 export { SynapticMemory } from './synaptic-memory.js';

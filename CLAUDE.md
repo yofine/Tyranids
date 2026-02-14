@@ -1,381 +1,209 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working with this repository.
 
-## 项目概述
+## Project overview
 
-Tyranids 是一个基于虫群智能的编程 Agent 系统,灵感来自战锤40k的泰伦虫族。
+Tyranids is a swarm intelligence agent system inspired by Warhammer 40k Tyranids. Autonomous agents self-organize through pheromone-based communication in a shared environment to collaboratively solve tasks.
 
-**核心特性**:
-- 🐝 去中心化虫群协作 (无 Lead Agent)
-- 🧬 基因吞噬与自我进化
-- 🦠 6种预定义兵种 (Explorer, Refiner, Validator, Carnifex, Lictor, Hive Tyrant)
-- 📊 详细度量和可视化
-- 💰 成本优化 (目标 <$0.20 per task)
+The system is general-purpose — it handles code generation, research, writing, analysis, and any task decomposable into file-based artifacts.
 
-## 技术栈
+## Tech stack
 
-- **语言**: TypeScript 5.9.2
-- **运行时**: Node.js 20+
-- **LLM 框架**: Pi (@mariozechner/pi-ai)
-- **支持的提供商**: Anthropic, OpenAI, Google, Minimax
-- **构建工具**: TypeScript Compiler, npm workspaces
+- **Language**: TypeScript 5.9.2
+- **Runtime**: Node.js 20+
+- **LLM framework**: Pi (@mariozechner/pi-ai) — unified interface for multiple providers
+- **Supported providers**: Anthropic, OpenAI, Google, Minimax
+- **Build**: TypeScript compiler, npm workspaces
+- **CLI UI**: Ink v6 (React for terminal) with ink-spinner and ink-text-input
 
-## 项目结构
+## Project structure
 
 ```
-tyranids/
-├── packages/
-│   └── swarm-core/              # 核心虫群引擎
-│       ├── src/
-│       │   ├── pheromone-pool.ts      # 信息素池
-│       │   ├── swarm-agent-pi.ts      # 虫群个体 (Pi版本)
-│       │   ├── orchestrator-pi.ts     # 虫群编排器 (Pi版本)
-│       │   ├── observer.ts            # 观测和度量系统
-│       │   ├── evaluator.ts           # 质量评估器
-│       │   └── bioengine/             # 泰伦生物引擎
-│       │       ├── types.ts           # 类型定义
-│       │       ├── bioforms.ts        # 预定义兵种
-│       │       └── tyranid-bioengine.ts  # 进化引擎
-│       └── package.json
-├── examples/
-│   └── add-priority-feature/    # 示例: 为 TODO 添加优先级
-│       ├── todo.ts              # 原始代码
-│       ├── run-swarm.ts         # Anthropic 版本
-│       ├── run-swarm-minimax.ts # Minimax 版本
-│       └── demo-bioengine.ts    # 生物引擎演示
-└── docs/
-    ├── architecture.md          # 系统架构
-    ├── pi-framework-api.md      # Pi 框架 API
-    ├── bioengine.md             # 生物引擎文档
-    ├── quick-start.md           # 快速上手
-    └── minimax-setup.md         # Minimax 配置指南
+packages/
+├── swarm-core/                  # Core engine (do not break existing APIs)
+│   ├── src/
+│   │   ├── environment.ts             # SwarmEnvironment — shared spatial pheromone pool
+│   │   ├── environment-agent.ts       # EnvironmentAgent — autonomous LLM agent with tools
+│   │   ├── environment-orchestrator.ts # EnvironmentOrchestrator — lifecycle manager
+│   │   ├── swarm-tools.ts             # Tool definitions agents use to perceive & act
+│   │   ├── evaluator.ts              # CompileFunction implementations (TypeScript, passthrough)
+│   │   ├── synaptic-memory.ts        # Markdown-based persistent memory system
+│   │   ├── types.ts                  # All core type definitions
+│   │   ├── index.ts                  # Public API exports
+│   │   ├── bioengine/               # Genetic algorithm evolution
+│   │   │   ├── bioforms.ts          # Predefined agent configurations (6 species)
+│   │   │   ├── types.ts             # BioEngine types
+│   │   │   └── tyranid-bioengine.ts # Evolution engine
+│   │   ├── pheromone-pool.ts        # Legacy single-file pheromone pool
+│   │   ├── multi-file-pheromone-pool.ts  # Legacy multi-file pool
+│   │   ├── swarm-agent-pi.ts        # Legacy single-file agent
+│   │   ├── orchestrator-pi.ts       # Legacy single-file orchestrator
+│   │   └── observer.ts             # Metrics and observability
+│   └── package.json
+│
+├── swarm-cli/                   # Interactive terminal interface
+│   ├── src/
+│   │   ├── cli.ts               # CLI entry point (bin: tyranids)
+│   │   ├── gatekeeper.ts        # Single-agent interaction, complexity routing
+│   │   ├── hive-mind.ts         # Swarm coordination (Gatekeeper → Orchestrator bridge)
+│   │   ├── skill-library.ts     # Skill extraction, storage, matching, injection
+│   │   ├── self-evolution.ts    # LLM-driven self-modification engine
+│   │   ├── terminal-ui.tsx      # Ink-based React terminal UI
+│   │   ├── workspace.ts         # Workspace management (~/.tyranids/ and .tyranids/)
+│   │   └── types.ts             # CLI type definitions
+│   └── package.json
+│
+├── swarm-skills/                # Claude Code skill integration (placeholder)
+│
+└── examples/
+    ├── add-priority-feature/    # Single-file swarm example
+    └── level-1-calculator/      # Multi-file environment swarm example
 ```
 
-## 常用命令
-
-### 构建
+## Build commands
 
 ```bash
-# 根目录 - 构建所有包
+# Build all packages (from repo root)
 npm run build
 
-# swarm-core - 单独构建
-cd packages/swarm-core
-npm run build
+# Build individual package
+cd packages/swarm-core && npm run build
+cd packages/swarm-cli && npm run build
 
-# 清理构建产物
+# Clean build artifacts
 npm run clean
+
+# Lint
+npm run check
+
+# Format
+npm run format
 ```
 
-### 测试
+## Test commands
 
 ```bash
-# 运行单元测试
-cd packages/swarm-core
-npm test
+# Unit tests
+cd packages/swarm-core && npm test
 
-# 运行虫群示例 (Anthropic)
-cd examples/add-priority-feature
-export ANTHROPIC_API_KEY="sk-ant-..."
-npm run test-swarm
-
-# 运行虫群示例 (Minimax)
-cd examples/add-priority-feature
-export MINIMAX_API_KEY="your-key"
-export MINIMAX_GROUP_ID="your-group-id"
-npm run test-swarm-minimax
-
-# 演示生物引擎
-cd examples/add-priority-feature
-npm run demo-bioengine
+# Run calculator example (needs ANTHROPIC_API_KEY or MINIMAX_API_KEY)
+cd examples/level-1-calculator
+npx tsx run-environment-swarm.ts
 ```
 
-## 核心架构
+## Key architecture concepts
 
-### 1. 信息素池 (PheromonePool)
+### Environment-based swarm (v2 — primary system)
 
-**作用**: 虫群的共享知识库,类似蚁群的信息素轨迹
+The current primary architecture. Files: `environment.ts`, `environment-agent.ts`, `environment-orchestrator.ts`, `swarm-tools.ts`.
 
-**关键方法**:
-- `deposit(pheromone)` - 存储信息素
-- `read(filter)` - 读取信息素
-- `getTop(n)` - 获取质量最高的 n 个方案
-- `calculateConvergence()` - 计算收敛度
+- **SwarmEnvironment**: Shared spatial pheromone pool. File slots are regions; solutions are spatial pheromones anchored to files.
+- **EnvironmentAgent**: Autonomous agent using Pi `complete()` with tool calling. Each iteration is a fresh LLM conversation with synaptic memory injection.
+- **EnvironmentOrchestrator**: Lifecycle manager — seeds environment, spawns agents, monitors convergence, handles elastic scaling. Does NOT assign tasks.
+- **Tools**: `observe_environment`, `read_file_content`, `read_dependency`, `submit_solution`, `signal` — agents use these to perceive and act.
+- **CompileFunction**: Pluggable validation. `createTypeScriptCompileFn()` for TypeScript, `createPassthroughValidateFn()` for non-code tasks, or custom functions.
 
-**信息素强化**: 当多个 Agent 支持同一方案时,质量 +0.1 (最高 1.0)
+### Agent system prompt
 
-### 2. 虫群个体 (SwarmAgentPi)
+The default system prompt in `environment-agent.ts` is language-agnostic. It can be overridden via `EnvironmentAgentConfig.systemPrompt` or `EnvironmentOrchestratorConfig.agentSystemPrompt`.
 
-**行为模式**:
-- 60% 跟随最强信息素 (exploitation)
-- 25% 探索相似方案 (local search)
-- 15% 完全随机探索 (exploration)
+### CLI flow
 
-**关键方法**:
-- `execute(maxIterations)` - 主循环
-- `decideAction()` - 概率决策
-- `performAction()` - 执行动作 (调用 LLM)
-- `stop()` - 停止执行
+```
+User input → Gatekeeper (complexity assessment)
+  ├── simple → single LLM call → response
+  └── moderate/complex → HiveMind → EnvironmentOrchestrator → swarm execution
+                                   → real-time events → Terminal UI
+```
 
-**状态**: EXPLORING, REFINING, IDLE
+### Pheromone reinforcement
 
-### 3. 虫群编排器 (SwarmOrchestratorPi)
+When multiple agents submit compatible solutions for the same file, the existing pheromone's quality increases (+0.1, max 1.0). This creates positive feedback — high-quality solutions attract more agents.
 
-**职责**: 统筹虫群执行,但不控制个体行为
+### Convergence
 
-**关键方法**:
-- `execute()` - 执行虫群
-- `spawnAgents()` - 派生 agents
-- `monitorConvergence()` - 监控收敛
-- `stopAllAgents()` - 停止所有 agents
+`globalConvergence = average(fileConvergence for each file)`
 
-**收敛条件**: 80% agents 聚集在同一方案
+A file converges when its best solution quality exceeds `fileConvergenceThreshold`. The swarm stops when `globalConvergence >= globalConvergenceThreshold`.
 
-### 4. 观测器 (SwarmObserver)
+### Synaptic memory
 
-**职责**: 收集度量数据,生成报告
+Persisted as markdown files in `.swarm-memory/`:
+- `trails/<file>.md` — per-file trail markers (what worked, what failed)
+- `synapses/*.md` — cross-file insights
+- `hive-state.md` — periodic environment state snapshot
 
-**关键方法**:
-- `recordAgentAction()` - 记录 agent 行为
-- `recordPheromoneSnapshot()` - 记录信息素快照
-- `recordLLMCall()` - 记录 LLM 调用
-- `generateReport()` - 生成报告
-- `visualizePheromoneEvolution()` - ASCII 可视化
+### Skill library
 
-### 5. 泰伦生物引擎 (TyranidBioEngine)
+Skills are markdown files stored in `~/.tyranids/skills/` (global) or `.tyranids/skills/` (project, overrides global). After each successful task, `SkillLibrary.extractSkills()` uses an LLM to distill reusable patterns. Skills are matched by keyword and injected into agent context for future tasks.
 
-**职责**: 基因吞噬与进化
+### Self-evolution
 
-**关键方法**:
-- `recordExecution()` - 记录执行到基因库
-- `triggerEvolution()` - 触发遗传算法优化
-- `loadEvolvedConfig()` - 加载进化后的配置
-- `analyzeEvolutionOpportunities()` - 分析进化机会
+`SelfEvolution` can analyze swarm-core source files, propose patches via LLM, create snapshots, apply patches, run `tsc --build`, and rollback on failure. Triggered via `/evolve` in the CLI.
 
-**进化机制**: 每 10 次执行自动触发,使用遗传算法 (选择、交叉、变异)
+## Important patterns
 
-## 开发指南
+### All agents use Pi framework
 
-### 添加新的预定义兵种
+Every LLM call uses `complete()` from `@mariozechner/pi-ai`. Never use raw HTTP calls or other SDKs directly. The Pi framework provides:
+- `complete(model, context)` — single completion
+- `Context` — system prompt + message history
+- `Tool` / `ToolCall` / `ToolResultMessage` — tool calling protocol
+- `getModel(provider, modelName)` — model factory
 
-编辑 `packages/swarm-core/src/bioengine/bioforms.ts`:
+### Event hooks for UI integration
 
+`EnvironmentOrchestratorConfig.onEvent` receives events like `agent_spawned`, `solution_submitted`, `scaling`, `convergence_update`. The CLI's `HiveMind` maps these to `SwarmEvent` types consumed by `TerminalUI`.
+
+### Pluggable validation
+
+The `CompileFunction` type signature:
 ```typescript
-export const BIOFORMS: { [key: string]: Bioform } = {
-  // ... 现有兵种 ...
-
-  newBioform: {
-    name: 'NewBioform',
-    role: '新兵种 - 描述',
-    traits: {
-      explorationRate: 0.25,
-      qualityThreshold: 0.80,
-      agentCount: 5,
-      speed: 'normal',
-      cost: 'medium',
-      maxIterations: 20,
-    },
-    适用场景: ['场景1', '场景2'],
-  },
-};
+type CompileFunction = (
+  filePath: string,
+  code: string,
+  contextFiles: Map<string, string>
+) => Promise<{ success: boolean; errors: string[] }>;
 ```
 
-### 修改虫群行为概率
+`HiveMind.selectValidationFn()` auto-detects: `.ts`/`.tsx` files use TypeScript compiler, everything else uses passthrough.
 
-编辑 `packages/swarm-core/src/swarm-agent-pi.ts`:
+### Terminal UI (Ink/React)
 
-```typescript
-private decideAction(pheromones: Pheromone[]): Action {
-  const random = Math.random();
+`terminal-ui.tsx` uses Ink v6 with React components. The `TerminalUI` class provides an imperative bridge to the React state via refs (`stateRef`, `setStateRef`). Handles both TTY (full interactive) and pipe (debug mode + readline fallback) modes.
 
-  // 修改这些概率值
-  if (random < 0.60 && pheromones.length > 0) {
-    // Exploitation
-    return { type: 'REFINE', target: pheromones[0] };
-  } else if (random < 0.85 && pheromones.length > 3) {
-    // Local search
-    return { type: 'REFINE', target: pheromones[Math.floor(Math.random() * 3) + 1] };
-  } else {
-    // Exploration
-    return { type: 'EXPLORE' };
-  }
-}
+## Common pitfalls
+
+### Do not break the shared environment
+
+All agents MUST share the same `SwarmEnvironment` instance. Creating separate environments defeats the pheromone communication mechanism.
+
+### Do not manually control agent behavior
+
+Agents self-organize. Influence behavior through configuration (exploration rate, convergence threshold, system prompt), not by directly assigning files or forcing state transitions.
+
+### Do not skip convergence detection
+
+Always use the orchestrator's monitoring loop. Running agents for a fixed number of iterations wastes API calls when the swarm has already converged.
+
+### TypeScript module resolution
+
+`swarm-cli` uses `"moduleResolution": "Node16"` and `"jsx": "react-jsx"` for Ink compatibility. `swarm-core` uses standard TypeScript resolution. Both are ESM (`"type": "module"`).
+
+## Workspace directories
+
 ```
+~/.tyranids/                     # Global home (TyranidWorkspace.getGlobalHome())
+├── config.md                    # Provider, model configuration
+├── gene-pool/                   # BioEngine data
+└── skills/                      # Global skills
 
-### 调整质量评估权重
-
-编辑 `packages/swarm-core/src/evaluator.ts`:
-
-```typescript
-async evaluateCodeFragment(fragment: CodeFragment): Promise<number> {
-  const compiles = await this.checkCompilation(fragment);
-  const complete = this.checkCompleteness(fragment);
-  const simple = this.checkSimplicity(fragment);
-
-  // 修改这些权重
-  return (
-    0.4 * (compiles ? 1 : 0) +
-    0.3 * complete +
-    0.3 * simple
-  );
-}
+<project>/.tyranids/             # Project workspace
+├── workspace.md                 # Project metadata
+├── .swarm-memory/               # Synaptic memory
+├── tasks/                       # Task history
+├── generated/                   # Generated file backups
+├── evolution/                   # Patches & snapshots
+└── skills/                      # Project skills
 ```
-
-### 添加新的 LLM 提供商
-
-Pi 框架原生支持多个提供商,只需在创建 Orchestrator 时指定:
-
-```typescript
-const orchestrator = new SwarmOrchestratorPi({
-  config,
-  task,
-  provider: 'your-provider', // anthropic, openai, google, minimax 等
-});
-```
-
-确保设置相应的环境变量。
-
-## 重要概念
-
-### 去中心化 vs 中心化
-
-**Tyranids (去中心化)**:
-- 无 Lead Agent
-- Agents 通过信息素池间接通信
-- 收敛自然涌现
-
-**Claude Code Agent Teams (中心化)**:
-- 有 Lead Agent 统筹
-- Agents 点对点消息通信
-- Lead 审批计划
-
-### 信息素强化
-
-当多个 Agent 发现并支持同一方案时:
-- 该方案的信息素质量 +0.1
-- 吸引更多 Agent 跟随
-- 形成正反馈循环
-
-### 收敛检测
-
-```typescript
-convergence = topPheromone.depositors.length / totalAgents
-```
-
-当 `convergence >= 0.8` 时,系统认为已收敛。
-
-### 基因吞噬
-
-每次执行后自动记录到 `~/.tyranids/gene-pool/execution-history.jsonl`:
-- 任务类型
-- 使用的配置
-- 执行结果 (质量、速度、成本)
-- 综合评分
-
-每 10 次执行触发遗传算法,优化配置参数。
-
-## 常见陷阱
-
-### 1. 不要手动干预 Agent 行为
-
-❌ **错误**:
-```typescript
-if (agent.state === 'EXPLORING') {
-  agent.state = 'REFINING'; // 手动改变状态
-}
-```
-
-✅ **正确**:
-让 Agent 自主决策,通过调整概率和配置影响行为。
-
-### 2. 不要破坏信息素池的共享性
-
-❌ **错误**:
-```typescript
-const pool1 = new PheromonePool();
-const pool2 = new PheromonePool();
-// Agents 使用不同的池
-```
-
-✅ **正确**:
-所有 Agents 必须共享同一个 PheromonePool 实例。
-
-### 3. 不要忽略收敛检测
-
-❌ **错误**:
-```typescript
-// 强制运行所有迭代
-for (let i = 0; i < maxIterations; i++) {
-  await agent.execute();
-}
-```
-
-✅ **正确**:
-使用 Orchestrator 的 `monitorConvergence()`,检测到收敛立即停止。
-
-## 调试技巧
-
-### 查看详细日志
-
-所有关键操作都有 console.log 输出:
-- Agent 生成
-- 行为决策
-- 信息素存储
-- 收敛监控
-
-### 导出度量数据
-
-```typescript
-const metrics = orchestrator.observer.exportJSON();
-await writeFile('metrics.json', metrics);
-```
-
-分析 JSON 文件查看详细数据。
-
-### 可视化信息素演化
-
-```typescript
-orchestrator.observer.visualizePheromoneEvolution();
-```
-
-查看 ASCII 图表了解收敛过程。
-
-## 性能优化
-
-### 减少成本
-
-```typescript
-const config = {
-  agentCount: 3,              // 减少 agents
-  maxIterations: 15,          // 减少迭代
-  modelPreference: 'haiku-only',  // 使用小模型
-};
-```
-
-### 加快收敛
-
-```typescript
-const config = {
-  convergenceThreshold: 0.7,  // 降低收敛阈值
-  explorationRate: 0.10,      // 降低探索率,更多利用
-};
-```
-
-### 提高质量
-
-```typescript
-const config = {
-  agentCount: 10,             // 增加 agents
-  maxIterations: 30,          // 增加迭代
-  modelPreference: 'sonnet-preferred',  // 使用大模型
-};
-```
-
-## 参考文档
-
-- [快速上手](./docs/quick-start.md) - 5 分钟入门
-- [Minimax 配置](./docs/minimax-setup.md) - 使用 Minimax 模型
-- [系统架构](./docs/architecture.md) - 深入理解设计
-- [生物引擎](./docs/bioengine.md) - 进化机制详解
-- [Pi 框架 API](./docs/pi-framework-api.md) - LLM 接口文档

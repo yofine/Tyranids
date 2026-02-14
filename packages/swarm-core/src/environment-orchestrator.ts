@@ -15,7 +15,7 @@
 import { getModel, type Model, type Api } from '@mariozechner/pi-ai';
 import { SwarmEnvironment } from './environment.js';
 import { EnvironmentAgent } from './environment-agent.js';
-import { createTypeScriptCompileFn } from './evaluator.js';
+import { createPassthroughValidateFn } from './evaluator.js';
 import { SynapticMemory } from './synaptic-memory.js';
 import type {
   EnvironmentTask,
@@ -28,7 +28,10 @@ export interface EnvironmentOrchestratorConfig {
   swarmConfig: EnvironmentSwarmConfig;
   provider?: string;
   modelName?: string;
+  /** Validation function for solutions. Defaults to passthrough (always passes). */
   compileFn?: CompileFunction;
+  /** Optional custom system prompt for agents */
+  agentSystemPrompt?: string;
   /** Optional event callback for real-time UI integration */
   onEvent?: (event: { type: string; data: Record<string, unknown> }) => void;
 }
@@ -47,13 +50,14 @@ export class EnvironmentOrchestrator {
   private snapshotTimer: ReturnType<typeof setInterval> | null = null;
   private memory: SynapticMemory | null = null;
   private onEvent: ((event: { type: string; data: Record<string, unknown> }) => void) | null = null;
+  private agentSystemPrompt: string | undefined;
 
   constructor(params: EnvironmentOrchestratorConfig) {
     this.config = params.swarmConfig;
     this.task = params.task;
     this.provider = params.provider ?? 'anthropic';
     this.modelName = params.modelName ?? 'claude-haiku-4-5-20241022';
-    this.compileFn = params.compileFn ?? createTypeScriptCompileFn();
+    this.compileFn = params.compileFn ?? createPassthroughValidateFn();
 
     this.environment = new SwarmEnvironment({
       evaporationRate: this.config.evaporationRate,
@@ -73,8 +77,9 @@ export class EnvironmentOrchestrator {
       };
     }
 
-    // Store event callback
+    // Store event callback and agent prompt
     this.onEvent = params.onEvent ?? null;
+    this.agentSystemPrompt = params.agentSystemPrompt;
 
     // Initialize synaptic memory if enabled
     const memConfig = this.config.synapticMemory;
@@ -226,6 +231,7 @@ export class EnvironmentOrchestrator {
       model: this.model,
       maxIterations: this.config.maxIterations,
       memory: this.memory ?? undefined,
+      systemPrompt: this.agentSystemPrompt,
     });
 
     this.agents.push(agent);

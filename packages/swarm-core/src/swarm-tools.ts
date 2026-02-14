@@ -57,7 +57,7 @@ export function createSwarmTools(
 
   const readFileSolutionTool: Tool = {
     name: 'read_file_solution',
-    description: 'Read the current best solution for a specific file. Returns the code and its declared exports. Use this to understand what dependencies export so you can import from them correctly.',
+    description: 'Read the current best solution for a specific file. Returns the content and its declared exports. Use this to understand what dependencies provide so you can reference them correctly.',
     parameters: Type.Object({
       file_path: Type.String({ description: 'The file path to read the best solution for' }),
     }),
@@ -65,11 +65,11 @@ export function createSwarmTools(
 
   const submitSolutionTool: Tool = {
     name: 'submit_solution',
-    description: 'Submit your code solution for a file. You must declare what names your code exports and what it imports from other files. The system will compile-check and score your solution. Returns quality score and any errors.',
+    description: 'Submit your solution for a file. You must declare what names your solution exports and what it imports from other files. The system will validate and score your solution. Returns quality score and any errors.',
     parameters: Type.Object({
       file_path: Type.String({ description: 'The file path this solution is for' }),
-      code: Type.String({ description: 'The complete source code for this file' }),
-      declared_exports: Type.Array(Type.String(), { description: 'Names that this file exports (e.g. function names, class names, type names)' }),
+      code: Type.String({ description: 'The complete content for this file' }),
+      declared_exports: Type.Array(Type.String(), { description: 'Names that this file exports (e.g. functions, classes, types, variables)' }),
       declared_imports: Type.Array(
         Type.Object({
           name: Type.String({ description: 'The imported name' }),
@@ -82,10 +82,10 @@ export function createSwarmTools(
 
   const compileCheckTool: Tool = {
     name: 'compile_check',
-    description: 'Check if your code compiles in the context of existing solutions for other files. Use this before submitting to catch errors early. Returns success/failure and error messages.',
+    description: 'Validate your solution in the context of existing solutions for other files. Use this before submitting to catch errors early. Returns success/failure and error messages.',
     parameters: Type.Object({
       file_path: Type.String({ description: 'The file path to check' }),
-      code: Type.String({ description: 'The code to compile-check' }),
+      code: Type.String({ description: 'The content to validate' }),
     }),
   };
 
@@ -177,19 +177,19 @@ export function createSwarmTools(
         compilationErrors = [err.message || 'Compilation check failed'];
       }
 
-      // Multi-factor quality formula
-      const codeLines = args.code.split('\n').length;
+      // Multi-factor quality formula (language-agnostic)
+      const contentLines = args.code.split('\n').length;
 
-      // Factor 1: Compilation (0-0.35)
-      const compilationFactor = compilationSuccess ? 0.35 : 0.0;
+      // Factor 1: Validation pass (0-0.40)
+      const validationFactor = compilationSuccess ? 0.40 : 0.0;
 
-      // Factor 2: Code substance (0-0.25)
+      // Factor 2: Content substance (0-0.25)
       const substanceFactor = Math.min(0.25,
-        (codeLines > 5 ? 0.05 : 0) +
-        (codeLines > 15 ? 0.05 : 0) +
-        (codeLines > 30 ? 0.05 : 0) +
+        (contentLines > 5 ? 0.05 : 0) +
+        (contentLines > 15 ? 0.05 : 0) +
+        (contentLines > 30 ? 0.05 : 0) +
         (args.declared_exports.length > 0 ? 0.05 : 0) +
-        (args.code.includes('function') || args.code.includes('class') ? 0.05 : 0)
+        (args.code.trim().length > 100 ? 0.05 : 0)
       );
 
       // Factor 3: Compatibility with dependencies (0-0.20)
@@ -207,18 +207,15 @@ export function createSwarmTools(
       compatibilityScore = Math.max(0, compatibilityScore);
       const compatFactor = compatibilityScore * 0.20;
 
-      // Factor 4: Structural quality (0-0.20)
-      const hasTypes = /:\s*(string|number|boolean|void|any|unknown)/.test(args.code) ||
-                       /interface\s+\w+/.test(args.code) || /type\s+\w+/.test(args.code);
-      const hasErrorHandling = /throw\s+new\s+Error|try\s*\{|catch\s*\(/.test(args.code);
-      const hasExportStatements = /export\s+(function|class|type|interface|const|enum)/.test(args.code);
-      const structuralFactor = Math.min(0.20,
-        (hasTypes ? 0.07 : 0) +
-        (hasErrorHandling ? 0.05 : 0) +
-        (hasExportStatements ? 0.08 : 0)
+      // Factor 4: Completeness (0-0.15) — non-trivial content with declared exports
+      const hasNonTrivialContent = contentLines > 10 && args.code.trim().length > 200;
+      const hasExports = args.declared_exports.length > 0;
+      const completenessFactor = Math.min(0.15,
+        (hasNonTrivialContent ? 0.08 : 0) +
+        (hasExports ? 0.07 : 0)
       );
 
-      const quality = Math.min(1.0, compilationFactor + substanceFactor + compatFactor + structuralFactor);
+      const quality = Math.min(1.0, validationFactor + substanceFactor + compatFactor + completenessFactor);
 
       // Map snake_case tool args to camelCase types
       const mappedImports = args.declared_imports.map(i => ({

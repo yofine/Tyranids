@@ -33,10 +33,13 @@ export interface EnvironmentAgentConfig {
   model: Model<Api>;
   maxIterations: number;
   memory?: SynapticMemory;
+  /** Optional custom system prompt override. If not set, uses the default autonomous agent prompt. */
+  systemPrompt?: string;
 }
 
-const SYSTEM_PROMPT = `You are a swarm agent in a decentralized coding system.
-You work on ONE file at a time. No one tells you what to do.
+function buildDefaultSystemPrompt(): string {
+  return `You are an autonomous swarm agent in a decentralized multi-agent system.
+You work on ONE file/artifact at a time. No central coordinator tells you what to do.
 
 Your workflow:
 1. Call perceive_environment to see all files, their status, and recommendations
@@ -47,10 +50,10 @@ Your workflow:
    - LOW: "solid" files (only if nothing else needs work)
    - SKIP: "excellent" files, or any file with activeAgentCount >= 2
 3. If the file depends on other files, call read_file_solution for each dependency
-4. Write complete TypeScript code, using imports like: import { Name } from './filename'
-5. Call compile_check to verify your code compiles in context
-6. If compilation fails, read errors, fix code, compile_check again (up to 3 attempts)
-7. Call submit_solution with your final code, declaring all exports and imports
+4. Write a complete solution for the file, respecting the language and conventions used
+5. Call compile_check to verify your solution validates in context
+6. If validation fails, read errors, fix your solution, compile_check again (up to 3 attempts)
+7. Call submit_solution with your final content, declaring all exports and imports
 
 Memory & Stigmergy:
 - Your synaptic memory (past iterations) may be included in the message below.
@@ -62,13 +65,14 @@ Memory & Stigmergy:
 
 Rules:
 - Always perceive the environment first
-- Always read dependency solutions before writing code that imports from them
+- Always read dependency solutions before writing content that references them
 - Check the activeAgentCount field — avoid files where 2+ agents are already working
 - Always compile_check before submitting
-- Declare ALL exported names (functions, types, interfaces, classes) accurately
+- Declare ALL exported names accurately
 - Declare ALL imports with the correct from_file path
-- Write complete, working TypeScript code with proper types — not stubs
-- Each file must have proper import/export statements`;
+- Write complete, working solutions — not stubs or placeholders
+- Each file must properly declare its dependencies and exports`;
+}
 
 export class EnvironmentAgent {
   private id: string;
@@ -78,6 +82,7 @@ export class EnvironmentAgent {
   private tools: Tool[];
   private handlers: SwarmToolHandlers;
   private memory: SynapticMemory | null;
+  private systemPrompt: string;
   private shouldStop: boolean = false;
   private iterationsCompleted: number = 0;
   private successfulSubmits: number = 0;
@@ -88,6 +93,7 @@ export class EnvironmentAgent {
     this.model = config.model;
     this.maxIterations = config.maxIterations;
     this.memory = config.memory ?? null;
+    this.systemPrompt = config.systemPrompt ?? buildDefaultSystemPrompt();
 
     const { tools, handlers } = createSwarmTools(
       config.environment,
@@ -149,7 +155,7 @@ export class EnvironmentAgent {
     }
 
     const context: Context = {
-      systemPrompt: SYSTEM_PROMPT,
+      systemPrompt: this.systemPrompt,
       messages: [
         {
           role: 'user',

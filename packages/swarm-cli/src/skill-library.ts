@@ -98,22 +98,22 @@ export class SkillLibrary {
   ): Promise<Skill[]> {
     // Build the prompt
     let filesContent = '';
-    for (const [path, code] of generatedFiles) {
-      filesContent += `\n### ${path}\n\`\`\`typescript\n${code}\n\`\`\`\n`;
+    for (const [path, content] of generatedFiles) {
+      filesContent += `\n### ${path}\n\`\`\`\n${content}\n\`\`\`\n`;
     }
 
     const context: Context = {
-      systemPrompt: `You extract reusable programming skills from completed tasks.
-A "skill" is a design pattern, architecture approach, or coding technique that could be reused.
+      systemPrompt: `You extract reusable skills from completed tasks.
+A "skill" is a design pattern, architecture approach, technique, or methodology that could be reused.
 
 Return JSON array of skills. Each skill:
 {
   "name": "kebab-case-skill-name",
-  "category": "one of: parsing, architecture, algorithm, pattern, testing, io",
+  "category": "one of: parsing, architecture, algorithm, pattern, testing, io, research, writing, analysis",
   "complexity": "low|medium|high",
-  "language": "typescript",
+  "language": "the primary language or domain (e.g. typescript, python, markdown, general)",
   "pattern": "1-2 sentence description of the pattern",
-  "template": "key code structure (pseudocode or skeleton)",
+  "template": "key structure (pseudocode, skeleton, or methodology outline)",
   "whenToUse": ["bullet point conditions"],
   "lessonsLearned": ["bullet point lessons"],
   "keywords": ["search keywords"]

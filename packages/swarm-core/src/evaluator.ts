@@ -291,7 +291,7 @@ export class Evaluator {
 }
 
 /**
- * Create a TypeScript compile function (default CompileFunction implementation).
+ * Create a TypeScript compile function (CompileFunction for TypeScript projects).
  *
  * Uses evaluateInContext under the hood to compile a file in the context of
  * other files from the environment.
@@ -306,5 +306,21 @@ export function createTypeScriptCompileFn(): CompileFunction {
   ) => {
     const result = await evaluator.evaluateInContext(filePath, code, contextFiles);
     return { success: result.compiles, errors: result.errors };
+  };
+}
+
+/**
+ * Create a passthrough validation function that always succeeds.
+ *
+ * Use this for non-compiled languages (e.g. Python, Markdown, JSON)
+ * or for general-purpose (non-code) tasks where compilation is not applicable.
+ */
+export function createPassthroughValidateFn(): CompileFunction {
+  return async (_filePath: string, content: string, _contextFiles: Map<string, string>) => {
+    // Basic validation: content must be non-empty
+    if (!content || content.trim().length === 0) {
+      return { success: false, errors: ['Empty content'] };
+    }
+    return { success: true, errors: [] };
   };
 }

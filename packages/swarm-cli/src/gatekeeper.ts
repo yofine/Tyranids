@@ -56,8 +56,9 @@ export class Gatekeeper {
     const skillNames = matchedSkills.map(s => s.name);
 
     const context: Context = {
-      systemPrompt: `You are a task complexity assessor for a code generation swarm system.
+      systemPrompt: `You are a task complexity assessor for a swarm intelligence system.
 Analyze the user's request and determine its complexity level.
+The swarm can handle any task type: coding, research, writing, analysis, design, etc.
 
 Return JSON with this structure:
 {
@@ -67,19 +68,19 @@ Return JSON with this structure:
   "requiredSkills": ["skill-name-1", "skill-name-2"],
   "fileStructure": [
     {
-      "filePath": "src/filename.ts",
-      "description": "what this file does",
-      "dependsOn": ["src/other.ts"]
+      "filePath": "path/to/artifact",
+      "description": "what this artifact does",
+      "dependsOn": ["path/to/dependency"]
     }
   ]
 }
 
 Classification rules:
-- "simple": Questions, explanations, single-file changes, small utilities (<50 lines)
+- "simple": Questions, explanations, single-file tasks, quick lookups
   → suggestedAgentCount: 1
-- "moderate": 2-3 file modifications with some dependencies, small features
+- "moderate": 2-3 artifacts with dependencies, medium features, multi-step analysis
   → suggestedAgentCount: 2-3
-- "complex": 4+ files, cross-module architecture, parsing/compilation, full features
+- "complex": 4+ artifacts, cross-module architecture, full features, deep research
   → suggestedAgentCount: 3-8
 
 fileStructure is required for "moderate" and "complex" levels.
@@ -143,9 +144,10 @@ Return ONLY the JSON, no other text.`,
     this.conversationHistory.push({ role: 'user', content: input });
 
     const context: Context = {
-      systemPrompt: `You are Tyranids, a swarm intelligence coding assistant.
-You help with programming questions, code explanations, and simple tasks.
-Be concise and direct. Write code when asked.
+      systemPrompt: `You are Tyranids, a swarm intelligence assistant.
+You help with tasks ranging from coding to research, writing, analysis, and problem-solving.
+Be concise and direct. When the task involves code, write working code.
+When the task involves other domains, provide well-structured, thorough responses.
 ${skillContext}${historyContext}`,
       messages: [{
         role: 'user',
@@ -180,16 +182,20 @@ ${skillContext}${historyContext}`,
    * Default assessment when LLM fails.
    */
   private defaultAssessment(input: string): ComplexityAssessment {
-    // Simple heuristic: long inputs with keywords → complex
+    // Simple heuristic: long inputs with task-oriented keywords → complex
     const words = input.split(/\s+/).length;
-    const codeKeywords = ['implement', 'create', 'build', 'parser', 'compiler',
-      'calculator', 'module', 'system', 'architecture', '多文件', '实现', '构建'];
-    const hasComplexKeyword = codeKeywords.some(k => input.toLowerCase().includes(k));
+    const complexKeywords = [
+      'implement', 'create', 'build', 'design', 'architecture', 'system',
+      'analyze', 'research', 'compare', 'evaluate', 'comprehensive',
+      'multi-file', 'module', 'parser', 'compiler', 'pipeline',
+      '多文件', '实现', '构建', '设计', '分析', '系统',
+    ];
+    const hasComplexKeyword = complexKeywords.some(k => input.toLowerCase().includes(k));
 
     if (words > 30 && hasComplexKeyword) {
       return {
         level: 'complex',
-        reasoning: 'Long request with complex keywords',
+        reasoning: 'Long request with complex task keywords',
         suggestedAgentCount: 5,
         requiredSkills: [],
       };
@@ -197,7 +203,7 @@ ${skillContext}${historyContext}`,
     if (hasComplexKeyword) {
       return {
         level: 'moderate',
-        reasoning: 'Request contains coding keywords',
+        reasoning: 'Request contains task-oriented keywords',
         suggestedAgentCount: 3,
         requiredSkills: [],
       };

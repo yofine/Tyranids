@@ -1,570 +1,299 @@
-# 🦎 Tyranids - 虫群智能编程 Agent 系统
+# Tyranids
 
-> 灵感来自战锤40k泰伦虫族 - 基于虫群智能的 AI 编程 Agent 系统，能够自我进化和适应
+> Swarm intelligence agent system inspired by Warhammer 40k Tyranids — autonomous agents that self-organize, evolve, and converge on solutions through pheromone-based communication.
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-[English](#english) | [中文](#chinese)
+## Overview
 
----
+Tyranids is a multi-agent system where autonomous agents collaborate through a shared environment rather than through a central coordinator. Agents deposit "pheromone" solutions into a shared environment, reinforce high-quality solutions from other agents, and converge naturally — similar to how ant colonies find optimal paths.
 
-## <a name="chinese"></a>🧬 核心理念
+The system is **general-purpose**: it can handle code generation, research, writing, analysis, and any task that can be decomposed into file-based artifacts.
 
-Tyranids 实现了一种**虫群智能**的代码生成方法，灵感来自战锤40k的泰伦虫族：
+### Key properties
 
-- **🧬 基因吞噬 (Gene Devouring)**: 从每次成功执行中吸收模式
-- **🧠 主宰意志 (Hive Mind)**: 通过信息素池共享知识
-- **🦠 兵种进化 (Bioform Evolution)**: 针对不同任务的专门化 Agent "兵种"
-- **🌍 行星适应 (Planetary Adaptation)**: 快速分析并适应新代码库
-- **♾️ 无限增殖**: 根据任务复杂度动态调整虫群规模
+- **Decentralized**: No lead agent. All agents are equal peers that self-organize.
+- **Pheromone communication**: Agents communicate indirectly through a shared environment (spatial pheromone pool), not point-to-point messages.
+- **Emergent convergence**: The best solutions naturally attract more agents, creating a positive feedback loop.
+- **Elastic scaling**: The swarm dynamically adds or removes agents based on task progress.
+- **Persistent memory**: Synaptic memory (markdown files) persists across iterations and crashes.
+- **Self-evolution**: The system can analyze and modify its own source code through LLM-driven patch generation.
 
-## ✨ 特性
-
-### 🐝 虫群协作
-
-- **去中心化架构**: 无 Lead Agent，所有 Agent 平等
-- **信息素通信**: 通过共享信息素池间接协作
-- **涌现收敛**: 最佳方案自然吸引更多 Agent
-- **并行探索**: 同时探索多种不同实现路径
-
-### 🧬 自我进化
-
-- **6种预定义兵种**: Explorer, Refiner, Validator, Carnifex, Lictor, Hive Tyrant
-- **遗传算法优化**: 自动优化虫群配置参数
-- **基因库积累**: 跨项目共享成功经验
-- **零配置进化**: 每10次执行自动触发进化
-
-### 📊 可观测性
-
-- **详细度量**: 执行时间、成本、收敛度、质量分布
-- **可视化**: ASCII 图表展示信息素演化
-- **完整报告**: Agent 行为分析、关键洞察
-- **实时监控**: 收敛过程实时追踪
-
-### 💰 成本优化
-
-- **目标成本**: <$0.20 per task (vs Claude Code Agent Teams 的 7x 单会话)
-- **分层模型**: 探索用 Haiku, 精炼用 Sonnet
-- **规则驱动决策**: 行为选择不调用 LLM
-- **早期停止**: 检测到收敛立即停止
-
-## 🚀 快速开始
-
-### 安装
-
-```bash
-# 克隆仓库
-git clone https://github.com/yourusername/tyranids.git
-cd tyranids
-
-# 安装依赖
-npm install
-
-# 构建所有包
-npm run build
-```
-
-### 运行示例
-
-```bash
-cd examples/add-priority-feature
-
-# 设置 API Key
-export ANTHROPIC_API_KEY="your-api-key"
-
-# 运行虫群测试
-npm run test-swarm
-```
-
-### 基本使用
-
-```typescript
-import { SwarmOrchestratorPi, type CodingTask, type SwarmConfig } from '@tyranids/swarm-core';
-
-// 定义任务
-const task: CodingTask = {
-  description: '为 Todo 接口添加优先级功能',
-  filePath: './todo.ts',
-  baseCode: '...', // 原始代码
-  type: 'add-feature',
-};
-
-// 虫群配置
-const config: SwarmConfig = {
-  agentCount: 5,           // 5 个虫子并行探索
-  maxIterations: 20,       // 最多 20 轮迭代
-  convergenceThreshold: 0.8,
-  explorationRate: 0.15,
-  modelPreference: 'haiku-only',
-};
-
-// 创建编排器
-const orchestrator = new SwarmOrchestratorPi({
-  config,
-  task,
-  provider: 'anthropic',
-});
-
-// 执行虫群
-const topSolutions = await orchestrator.execute();
-
-// 获取最佳方案
-console.log('Top-3 方案:', topSolutions);
-```
-
-## 📦 项目结构
+## Architecture
 
 ```
-tyranids/
-├── packages/
-│   ├── swarm-core/              # 核心虫群引擎
-│   │   ├── src/
-│   │   │   ├── pheromone-pool.ts      # 信息素池
-│   │   │   ├── swarm-agent-pi.ts      # 虫群个体 (Pi版本)
-│   │   │   ├── orchestrator-pi.ts     # 虫群编排器 (Pi版本)
-│   │   │   ├── observer.ts            # 观测和度量系统
-│   │   │   ├── evaluator.ts           # 质量评估器
-│   │   │   └── bioengine/             # 泰伦生物引擎
-│   │   │       ├── types.ts           # 类型定义
-│   │   │       ├── bioforms.ts        # 预定义兵种
-│   │   │       └── tyranid-bioengine.ts  # 进化引擎
-│   │   └── package.json
-│   └── swarm-skills/            # Claude Code 技能 (未来)
-├── examples/
-│   └── add-priority-feature/    # 示例: 为 TODO 添加优先级
-│       ├── todo.ts              # 原始代码
-│       ├── run-swarm.ts         # 虫群测试运行器
-│       └── demo-bioengine.ts    # 生物引擎演示
-├── docs/
-│   ├── architecture.md          # 系统架构文档
-│   ├── pi-framework-api.md      # Pi 框架 API 参考
-│   ├── bioengine.md             # 泰伦生物引擎文档
-│   └── mvp-validation.md        # MVP 验证清单
-├── BLUEPRINT.md                 # 详细技术规范
-└── README.md                    # 本文件
+packages/
+├── swarm-core/           # Core engine (environment, agents, orchestrator)
+│   ├── environment.ts          # Shared environment with spatial pheromones
+│   ├── environment-agent.ts    # Autonomous agent with tool-calling LLM
+│   ├── environment-orchestrator.ts  # Lifecycle manager (spawn, monitor, scale)
+│   ├── swarm-tools.ts          # Tools agents use to perceive & act
+│   ├── evaluator.ts            # Pluggable validation (TypeScript, passthrough, custom)
+│   ├── synaptic-memory.ts      # Markdown-based persistent memory
+│   └── bioengine/              # Genetic algorithm evolution system
+│       ├── bioforms.ts         # Predefined agent configurations (species)
+│       └── tyranid-bioengine.ts # Evolution engine
+│
+└── swarm-cli/            # Interactive terminal interface
+    ├── cli.ts                  # CLI entry point (bin: tyranids)
+    ├── gatekeeper.ts           # Single-agent interaction (complexity routing)
+    ├── hive-mind.ts            # Swarm coordination layer
+    ├── skill-library.ts        # Reusable skill extraction & matching
+    ├── self-evolution.ts       # Self-modification engine
+    ├── terminal-ui.tsx         # Ink-based terminal UI (React)
+    ├── workspace.ts            # Workspace & project management
+    └── types.ts                # CLI type definitions
 ```
 
-## 🐝 工作原理
+## How it works
 
-### 1. 信息素通信机制
+### 1. Environment-based swarm
 
-```
-Agent 1 探索 → 存储信息素 (质量: 0.85)
-                     ↓
-              [信息素池]
-                ↓    ↓    ↓
-Agent 2 读取 ← Agent 3 读取 ← Agent 4 读取
-    ↓              ↓              ↓
-跟随强化      探索相似      随机探索
-```
+Each task is decomposed into **file slots** — regions in a shared environment. Agents autonomously:
 
-**概率决策**:
-- 60% 跟随最强信息素 (exploitation)
-- 25% 探索相似方案 (local search)
-- 15% 完全随机探索 (exploration)
+1. **Observe** the environment (which files need work, current quality, signals from other agents)
+2. **Choose** a file to work on based on priority (empty > low-quality > signals)
+3. **Read** dependency files to understand the context
+4. **Generate** a solution using an LLM
+5. **Validate** the solution (compilation, structural checks)
+6. **Submit** the solution as a spatial pheromone
 
-### 2. 涌现收敛
+When multiple agents submit similar solutions, the pheromone **strengthens** — quality increases, attracting even more agents. This creates emergent convergence without any central decision-maker.
+
+### 2. Convergence detection
 
 ```
-迭代 0: [A:0.5] [B:0.6] [C:0.4] [D:0.7] [E:0.5]  收敛度: 20%
-迭代 3: [B:0.8] [B:0.8] [D:0.9] [D:0.9] [B:0.8]  收敛度: 60%
-迭代 5: [D:0.95] [D:0.95] [D:0.96] [D:0.96] [D:0.95]  收敛度: 85% ✅
+Iteration 0:  tokenizer [░░░░░░] 0.00   parser [░░░░░░] 0.00   main [░░░░░░] 0.00
+Iteration 3:  tokenizer [████░░] 0.72   parser [███░░░] 0.65   main [██░░░░] 0.40
+Iteration 7:  tokenizer [██████] 0.92   parser [█████░] 0.85   main [████░░] 0.78
+Iteration 9:  tokenizer [██████] 0.95   parser [██████] 0.90   main [██████] 0.88  CONVERGED
 ```
 
-当 80% agents 聚集在同一方案时，系统自动停止。
+When all files reach the convergence threshold, the swarm stops. No wasted iterations.
 
-### 3. 质量评估
+### 3. Elastic scaling
 
-```typescript
-quality = 0.4 × compiles + 0.3 × complete + 0.3 × simple
+The orchestrator monitors the environment and adjusts the agent count:
+- **Scale up**: When many files are empty or low-quality
+- **Scale down**: When most files are converged and agents are idle
+- Agents with the fewest successful submissions are retired first
 
-compiles  = TypeScript 编译是否通过 (0 或 1)
-complete  = 是否包含所有必要修改 (0-1)
-simple    = 代码简洁性评分 (0-1)
-```
+### 4. Synaptic memory
 
-### 4. 基因吞噬与进化
+Agents persist their learnings to markdown files in `.swarm-memory/`:
+- **Trail markers**: Per-file history of what worked and what failed
+- **Synaptic entries**: Cross-file insights and patterns
+- **Hive state snapshots**: Periodic environment state dumps
 
-```
-执行 1-9 次 → 积累数据到基因库
-执行第 10 次 → 🧬 自动触发进化
-              ↓
-        [遗传算法优化]
-         - 选择精英 (top 20%)
-         - 交叉生成子代
-         - 随机变异 (10%)
-         - K近邻预测性能
-              ↓
-      [进化后的配置]
-              ↓
-执行第 11 次 → 自动使用新配置 ✨
-```
+Memory survives across iterations, agent restarts, and even process crashes.
 
-## 🦠 预定义兵种
-
-### Explorer (探索者)
-**类比**: 泰伦的 Genestealer
-**特点**: 高探索率 (0.40), 追求多样性
-**适用**: 新功能开发, 需要创新方案
-
-### Refiner (精炼者)
-**类比**: 泰伦的 Tyranid Warrior
-**特点**: 低探索率 (0.05), 追求完美
-**适用**: 代码重构, 性能优化
-
-### Validator (验证者)
-**类比**: 泰伦的 Gargoyle
-**特点**: 中等探索率 (0.10), 专注验证
-**适用**: Bug修复, 测试验证
-
-### Carnifex (重型突击兵)
-**类比**: 泰伦的 Carnifex
-**特点**: 15个Agents, 大规模并行
-**适用**: 大规模重构, 整个模块重写
-
-### Lictor (刺客)
-**类比**: 泰伦的 Lictor
-**特点**: 单Agent, 极速执行
-**适用**: 简单bug修复, 快速迭代
-
-### Hive Tyrant (主宰暴君)
-**类比**: 泰伦的 Hive Tyrant
-**特点**: 平衡配置, 通用性强
-**适用**: 一般性任务, 未知任务类型
-
-## 📊 与 Claude Code Agent Teams 的对比
-
-| 维度 | Claude Code Agent Teams | Tyranids 虫群系统 |
-|------|------------------------|------------------|
-| **架构** | 中心化 (Lead + Teammates) | ✅ **去中心化** (无 Lead) |
-| **通信** | 点对点消息 | ✅ **信息素池** (间接通信) |
-| **决策** | Lead 审批 | ✅ **涌现收敛** (自组织) |
-| **成本** | ~7x 单会话 | ✅ **<3x** (分层模型 + 规则) |
-| **容错** | 单点故障 (Lead) | ✅ **无单点故障** |
-| **进化** | 静态配置 | ✅ **自我进化** (遗传算法) |
-
-## 📈 性能指标
-
-### MVP 目标
-
-- ✅ **成本**: <$0.20 per task
-- ✅ **速度**: <3 分钟
-- ✅ **收敛**: <15 轮
-- ✅ **并行**: 5 agents 同时执行
-- ✅ **方案多样性**: 至少 3 种不同方案
-
-### 实际结果 (待验证)
-
-运行 `npm run test-swarm` 查看实际指标。
-
-## 🔧 配置
-
-### 虫群配置
-
-```typescript
-interface SwarmConfig {
-  agentCount: number;           // Agent 数量 (默认 5)
-  maxIterations: number;        // 最大迭代次数 (默认 20)
-  convergenceThreshold: number; // 收敛阈值 (默认 0.8)
-  explorationRate?: number;     // 探索率 (默认 0.15)
-  modelPreference?: 'haiku-only' | 'sonnet-preferred';  // 模型偏好
-}
-```
-
-### 环境变量
-
-```bash
-# 必需
-export ANTHROPIC_API_KEY="your-api-key"
-
-# 可选 - 自定义基因库位置
-export TYRANIDS_GENE_POOL_DIR="~/.tyranids/gene-pool"
-```
-
-## 📚 文档
-
-- [系统架构](./docs/architecture.md) - 核心概念和设计模式
-- [Pi 框架 API](./docs/pi-framework-api.md) - Pi 框架使用指南
-- [泰伦生物引擎](./docs/bioengine.md) - 基因吞噬与进化系统
-- [MVP 验证清单](./docs/mvp-validation.md) - 功能验证和性能测试
-- [技术蓝图](./BLUEPRINT.md) - 详细技术规范
-
-## 🛠️ 开发
-
-### 构建
-
-```bash
-# 构建所有包
-npm run build
-
-# 清理构建产物
-npm run clean
-
-# 监听模式
-npm run build -- --watch
-```
-
-### 测试
-
-```bash
-# 运行单元测试
-npm test
-
-# 运行示例
-cd examples/add-priority-feature
-npm run test-swarm
-
-# 演示生物引擎
-npm run demo-bioengine
-```
-
-### 项目命令
-
-```bash
-# 根目录
-npm run build          # 构建所有包
-npm run clean          # 清理所有构建产物
-
-# swarm-core
-cd packages/swarm-core
-npm run build          # 构建
-npm test               # 运行测试
-
-# 示例
-cd examples/add-priority-feature
-npm run test-swarm     # 运行虫群测试
-npm run demo-bioengine # 演示生物引擎
-```
-
-## 🗺️ 路线图
-
-### ✅ MVP (已完成)
-
-- [x] PheromonePool (信息素池)
-- [x] SwarmAgent (虫群个体)
-- [x] SwarmOrchestrator (虫群编排器)
-- [x] Observer & Metrics (观测和度量)
-- [x] Pi Framework 集成
-- [x] BioEngine (泰伦生物引擎)
-- [x] 预定义兵种
-- [x] 遗传算法优化
-
-### 🚧 未来计划
-
-- [ ] Agent Skills (Claude Code 技能)
-- [ ] 环境适应 (Planetary Assimilation)
-- [ ] 代码模式提取
-- [ ] 动态兵种生成
-- [ ] 多文件修改支持
-- [ ] TUI 可视化界面
-- [ ] Web UI 展示
-
-## 🤝 贡献
-
-欢迎贡献! 请查看 [CONTRIBUTING.md](./CONTRIBUTING.md) 了解详情。
-
-### 开发流程
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/amazing-feature`)
-3. 提交更改 (`git commit -m 'feat: add amazing feature'`)
-4. 推送到分支 (`git push origin feature/amazing-feature`)
-5. 开启 Pull Request
-
-## 📄 许可证
-
-MIT License - 详见 [LICENSE](LICENSE) 文件
-
-## 🙏 致谢
-
-- **战锤40k 泰伦虫族**: 灵感来源
-- **Pi Framework** (@mariozechner/pi-ai): LLM 统一接口
-- **Claude Code**: Agent 开发平台
-- **蚁群优化算法**: 理论基础
-
-## 📞 联系
-
-- 问题反馈: [GitHub Issues](https://github.com/yourusername/tyranids/issues)
-- 讨论: [GitHub Discussions](https://github.com/yourusername/tyranids/discussions)
-
----
-
-<a name="english"></a>
-
-# 🦎 Tyranids - Swarm Intelligence Coding Agent System
-
-> Inspired by Warhammer 40k Tyranids - A swarm-based AI coding agent system that evolves and adapts
-
-## 🧬 Core Concept
-
-Tyranids implements a **swarm intelligence** approach to code generation, inspired by the Tyranids from Warhammer 40k:
-
-- **🧬 Gene Devouring**: Absorbs successful patterns from each execution
-- **🧠 Hive Mind**: Shared knowledge through pheromone pools
-- **🦠 Bioform Evolution**: Specialized agent "species" for different tasks
-- **🌍 Planetary Adaptation**: Rapidly analyzes and adapts to new codebases
-- **♾️ Infinite Reproduction**: Dynamically scales swarm based on task complexity
-
-## ✨ Features
-
-### 🐝 Swarm Collaboration
-
-- **Decentralized Architecture**: No Lead Agent, all agents are equal
-- **Pheromone Communication**: Indirect collaboration through shared pheromone pools
-- **Emergent Convergence**: Best solutions naturally attract more agents
-- **Parallel Exploration**: Simultaneously explore multiple different implementation paths
-
-### 🧬 Self-Evolution
-
-- **6 Predefined Bioforms**: Explorer, Refiner, Validator, Carnifex, Lictor, Hive Tyrant
-- **Genetic Algorithm Optimization**: Automatically optimize swarm configuration parameters
-- **Gene Pool Accumulation**: Share successful experiences across projects
-- **Zero-Config Evolution**: Automatically triggers evolution every 10 executions
-
-### 📊 Observability
-
-- **Detailed Metrics**: Execution time, cost, convergence, quality distribution
-- **Visualization**: ASCII charts showing pheromone evolution
-- **Comprehensive Reports**: Agent behavior analysis, key insights
-- **Real-time Monitoring**: Live tracking of convergence process
-
-### 💰 Cost Optimization
-
-- **Target Cost**: <$0.20 per task (vs Claude Code Agent Teams' 7x single session)
-- **Tiered Models**: Haiku for exploration, Sonnet for refinement
-- **Rule-based Decisions**: Behavior selection without LLM calls
-- **Early Stopping**: Stop immediately when convergence is detected
-
-## 🚀 Quick Start
+## Quick start
 
 ### Installation
 
 ```bash
-# Clone repository
-git clone https://github.com/yourusername/tyranids.git
+git clone https://github.com/nicekid1/tyranids.git
 cd tyranids
-
-# Install dependencies
 npm install
-
-# Build all packages
 npm run build
 ```
 
-### Run Example
+### Using the CLI
 
 ```bash
-cd examples/add-priority-feature
+# Initialize workspace in current directory
+npx tyranids --init
 
-# Set API Key
-export ANTHROPIC_API_KEY="your-api-key"
+# Start interactive session
+npx tyranids
 
-# Run swarm test
-npm run test-swarm
+# Specify provider and model
+npx tyranids --provider anthropic --model claude-haiku-4-5-20241022
 ```
 
-### Basic Usage
+Interactive commands:
+- `/status` — Show workspace status
+- `/skills` — List learned skills
+- `/history` — Show task history
+- `/evolve` — Trigger self-evolution analysis
+- `/init` — Initialize project workspace
+- `/clear` — Clear conversation
+- `/quit` — Exit
+
+Simple requests are answered directly by a single agent. Complex requests automatically trigger a swarm with real-time progress visualization.
+
+### Using the core engine directly
 
 ```typescript
-import { SwarmOrchestratorPi, type CodingTask, type SwarmConfig } from '@tyranids/swarm-core';
+import {
+  EnvironmentOrchestrator,
+  createTypeScriptCompileFn,
+  type EnvironmentTask,
+  type EnvironmentSwarmConfig,
+} from '@tyranids/swarm-core';
 
-// Define task
-const task: CodingTask = {
-  description: 'Add priority feature to Todo interface',
-  filePath: './todo.ts',
-  baseCode: '...', // Original code
-  type: 'add-feature',
+const task: EnvironmentTask = {
+  description: 'Implement a calculator with tokenizer, parser, and evaluator',
+  projectName: 'calculator',
+  fileSlots: [
+    { filePath: 'tokenizer.ts', description: 'Lexer that produces tokens', dependsOn: [] },
+    { filePath: 'parser.ts', description: 'Recursive descent parser', dependsOn: ['tokenizer.ts'] },
+    { filePath: 'evaluator.ts', description: 'AST evaluator', dependsOn: ['parser.ts'] },
+    { filePath: 'main.ts', description: 'CLI entry point', dependsOn: ['evaluator.ts'] },
+  ],
 };
 
-// Swarm configuration
-const config: SwarmConfig = {
-  agentCount: 5,           // 5 agents exploring in parallel
-  maxIterations: 20,       // Maximum 20 iterations
-  convergenceThreshold: 0.8,
-  explorationRate: 0.15,
-  modelPreference: 'haiku-only',
+const swarmConfig: EnvironmentSwarmConfig = {
+  agentCount: 3,
+  maxIterations: 15,
+  convergenceThreshold: 0.75,
+  minAgents: 2,
+  maxAgents: 5,
+  evaporationRate: 0.10,
+  evaporationInterval: 30000,
+  fileConvergenceThreshold: 0.75,
+  globalConvergenceThreshold: 0.75,
+  scaleCheckInterval: 20000,
 };
 
-// Create orchestrator
-const orchestrator = new SwarmOrchestratorPi({
-  config,
+const orchestrator = new EnvironmentOrchestrator({
   task,
+  swarmConfig,
   provider: 'anthropic',
+  modelName: 'claude-haiku-4-5-20241022',
+  compileFn: createTypeScriptCompileFn(),
+  onEvent: (event) => console.log(event),
 });
 
-// Execute swarm
-const topSolutions = await orchestrator.execute();
-
-// Get best solution
-console.log('Top-3 solutions:', topSolutions);
+const results = await orchestrator.execute();
+// results: Map<string, string> — filePath → generated code
 ```
 
-## 📦 Project Structure
+### Custom validation
 
-See Chinese section for detailed structure.
+The validation function is pluggable. For non-TypeScript tasks, use the passthrough validator or write your own:
 
-## 🐝 How It Works
+```typescript
+import { createPassthroughValidateFn } from '@tyranids/swarm-core';
 
-### 1. Pheromone Communication
+// Passthrough: accepts any non-empty content
+const orchestrator = new EnvironmentOrchestrator({
+  task,
+  swarmConfig,
+  compileFn: createPassthroughValidateFn(),
+});
 
-Agents communicate indirectly through a shared pheromone pool, similar to how ants use pheromone trails.
+// Custom validator
+const customValidate = async (filePath: string, code: string, context: Map<string, string>) => {
+  const isValid = /* your validation logic */;
+  return { success: isValid, errors: isValid ? [] : ['Validation failed'] };
+};
+```
 
-### 2. Emergent Convergence
+## Configuration
 
-No central coordinator - convergence emerges naturally as agents are attracted to high-quality solutions.
+### Environment variables
 
-### 3. Quality Evaluation
+```bash
+# Required — at least one provider key
+export ANTHROPIC_API_KEY="sk-ant-..."
+export OPENAI_API_KEY="sk-..."
+export GOOGLE_AI_API_KEY="..."
+export MINIMAX_API_KEY="..."
 
-Solutions are evaluated on three dimensions:
-- Compilation success (40% weight)
-- Functional completeness (30% weight)
-- Code simplicity (30% weight)
+# Optional — gene pool location
+export TYRANIDS_GENE_POOL_DIR="~/.tyranids/gene-pool"
+```
 
-### 4. Gene Devouring & Evolution
+### Workspace structure
 
-System automatically records execution history and uses genetic algorithms to optimize configuration parameters every 10 executions.
+```
+~/.tyranids/                     # Global home
+├── config.md                    # Provider, model, API key configuration
+├── gene-pool/                   # BioEngine genetic algorithm data
+└── skills/                      # Global skill library
 
-## 🦠 Predefined Bioforms
+<project>/.tyranids/             # Project workspace
+├── workspace.md                 # Project metadata
+├── .swarm-memory/               # Synaptic memory
+│   ├── hive-state.md
+│   ├── trails/
+│   └── synapses/
+├── tasks/                       # Task history
+├── generated/                   # Backup copies of generated files
+├── evolution/                   # Self-modification patches & snapshots
+└── skills/                      # Project-level skills (override global)
+```
 
-- **Explorer**: High exploration rate, pursues diversity
-- **Refiner**: Low exploration rate, pursues perfection
-- **Validator**: Focus on testing and verification
-- **Carnifex**: Large-scale parallel processing
-- **Lictor**: Single-agent fast execution
-- **Hive Tyrant**: Balanced general-purpose configuration
+## Supported providers
 
-## 📊 vs Claude Code Agent Teams
+The system uses the [Pi framework](https://github.com/nicekid1/pi-ai) for LLM access:
 
-| Dimension | Claude Code Agent Teams | Tyranids |
-|-----------|------------------------|----------|
-| **Architecture** | Centralized (Lead + Teammates) | ✅ **Decentralized** (No Lead) |
-| **Communication** | Point-to-point messages | ✅ **Pheromone Pool** (Indirect) |
-| **Decision** | Lead approval | ✅ **Emergent Convergence** (Self-organizing) |
-| **Cost** | ~7x single session | ✅ **<3x** (Tiered models + Rules) |
-| **Fault Tolerance** | Single point of failure (Lead) | ✅ **No single point** |
-| **Evolution** | Static configuration | ✅ **Self-evolving** (Genetic algorithm) |
+- **Anthropic** (Claude) — recommended
+- **OpenAI** (GPT)
+- **Google** (Gemini)
+- **Minimax** (MiniMax-M1/M2)
 
-## 📚 Documentation
+Any provider supported by Pi can be used. The agent system prompt is configurable, and the validation function is pluggable, so the system works with any language or domain.
 
-- [Architecture](./docs/architecture.md) - Core concepts and design patterns
-- [Pi Framework API](./docs/pi-framework-api.md) - Pi framework usage guide
-- [BioEngine](./docs/bioengine.md) - Gene devouring and evolution system
-- [MVP Validation](./docs/mvp-validation.md) - Feature validation and performance testing
-- [Technical Blueprint](./BLUEPRINT.md) - Detailed technical specifications
+## Bioforms (predefined configurations)
 
-## 📄 License
+Inspired by Tyranid species from Warhammer 40k:
 
-MIT License - see [LICENSE](LICENSE) file for details
+| Bioform | Analogy | Agents | Exploration | Use case |
+|---------|---------|--------|-------------|----------|
+| **Explorer** | Genestealer | 5 | High (0.40) | New features, creative solutions |
+| **Refiner** | Tyranid Warrior | 5 | Low (0.05) | Refactoring, optimization |
+| **Validator** | Gargoyle | 5 | Medium (0.10) | Bug fixes, testing |
+| **Carnifex** | Carnifex | 15 | Medium (0.20) | Large-scale rewrites |
+| **Lictor** | Lictor | 1 | Low (0.05) | Simple fixes, quick iterations |
+| **Hive Tyrant** | Hive Tyrant | 8 | Medium (0.15) | General-purpose, unknown tasks |
 
-## 🙏 Acknowledgments
+## Development
 
-- **Warhammer 40k Tyranids**: Source of inspiration
-- **Pi Framework** (@mariozechner/pi-ai): Unified LLM interface
-- **Claude Code**: Agent development platform
-- **Ant Colony Optimization**: Theoretical foundation
+### Build
 
----
+```bash
+# Build all packages
+npm run build
 
-**For the Hive Mind! 🧬**
+# Build individual package
+cd packages/swarm-core && npm run build
+cd packages/swarm-cli && npm run build
+
+# Watch mode
+cd packages/swarm-core && npm run dev
+```
+
+### Test
+
+```bash
+# Unit tests
+cd packages/swarm-core && npm test
+
+# Run calculator example (requires API key)
+cd examples/level-1-calculator
+npx tsx run-environment-swarm.ts
+```
+
+### Project commands
+
+```bash
+npm run build    # Build all workspaces
+npm run clean    # Clean all build artifacts
+npm run test     # Run all tests
+npm run check    # Biome lint check
+npm run format   # Biome format
+```
+
+## License
+
+MIT
+
+## Acknowledgments
+
+- **Warhammer 40k Tyranids** — Conceptual inspiration (Hive Mind, Gene Devouring, Bioforms)
+- **Pi Framework** (@mariozechner/pi-ai) — Unified LLM interface
+- **Ant Colony Optimization** — Theoretical foundation for pheromone-based coordination

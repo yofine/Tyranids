@@ -14,10 +14,12 @@ import { getModel, type Model, type Api } from '@mariozechner/pi-ai';
 import {
   EnvironmentOrchestrator,
   createTypeScriptCompileFn,
+  createPassthroughValidateFn,
 } from '@tyranids/swarm-core';
 import type {
   EnvironmentSwarmConfig,
   EnvironmentTask,
+  CompileFunction,
 } from '@tyranids/swarm-core';
 import { TyranidWorkspace } from './workspace.js';
 import { SkillLibrary } from './skill-library.js';
@@ -89,13 +91,16 @@ export class HiveMind {
       model = { ...model, baseUrl: 'https://api.minimaxi.com/anthropic' };
     }
 
-    // 6. Launch orchestrator with event hooks
+    // 6. Select validation function based on file types
+    const compileFn = this.selectValidationFn(envTask);
+
+    // 7. Launch orchestrator with event hooks
     const orchestrator = new EnvironmentOrchestrator({
       task: envTask,
       swarmConfig,
       provider,
       modelName,
-      compileFn: createTypeScriptCompileFn(),
+      compileFn,
       onEvent: (event) => this.handleOrchestratorEvent(event),
     });
 
@@ -229,6 +234,17 @@ export class HiveMind {
         snapshotInterval: 30000,
       },
     };
+  }
+
+  /**
+   * Select the appropriate validation function based on file types in the task.
+   * TypeScript files get tsc validation; everything else gets passthrough.
+   */
+  private selectValidationFn(task: EnvironmentTask): CompileFunction {
+    const hasTypeScript = task.fileSlots.some(
+      f => f.filePath.endsWith('.ts') || f.filePath.endsWith('.tsx')
+    );
+    return hasTypeScript ? createTypeScriptCompileFn() : createPassthroughValidateFn();
   }
 
   /**
