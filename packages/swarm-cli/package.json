@@ -1,0 +1,42 @@
+{
+  "name": "@tyranids/swarm-cli",
+  "version": "0.1.0",
+  "description": "Tyranids Interactive CLI - Swarm intelligence terminal interface",
+  "type": "module",
+  "main": "./dist/cli.js",
+  "types": "./dist/types.d.ts",
+  "bin": {
+    "tyranids": "./dist/cli.js"
+  },
+  "exports": {
+    ".": "./dist/cli.js",
+    "./types": "./dist/types.js"
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsc --build",
+    "dev": "tsc --build --watch"
+  },
+  "keywords": [
+    "tyranids",
+    "swarm",
+    "cli",
+    "terminal-ui",
+    "agent"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@mariozechner/pi-ai": "^0.52.9",
+    "@tyranids/swarm-core": "*",
+    "ink": "^6.7.0",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
+    "react": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^19.2.14",
+    "typescript": "^5.9.2"
+  }
+}

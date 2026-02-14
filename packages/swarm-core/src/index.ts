@@ -38,5 +38,9 @@ export {
 } from './environment-orchestrator.js';
 export { createTypeScriptCompileFn } from './evaluator.js';
 
+// Synaptic Memory - Filesystem persistence & agent memory
+export { SynapticMemory } from './synaptic-memory.js';
+export type { SynapticEntry, TrailMarker } from './synaptic-memory.js';
+
 // Version
 export const VERSION = '0.1.0';

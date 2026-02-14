@@ -2,7 +2,9 @@
  * EnvironmentAgent - Autonomous agent using tool calling
  *
  * Each iteration = one multi-turn LLM conversation with tool calls.
- * Context is NOT accumulated across iterations (fresh each time).
+ * Synaptic memory is injected at the start of each iteration so the agent
+ * can learn from its own past attempts. Context is still fresh per iteration,
+ * but the markdown-based memory persists across iterations (and crashes).
  *
  * The agent perceives the environment through tools, decides which file
  * to work on, reads dependencies, generates code, and submits solutions.
@@ -22,6 +24,7 @@ import {
 import type { SwarmEnvironment } from './environment.js';
 import type { CompileFunction } from './types.js';
 import { createSwarmTools, type SwarmToolHandlers } from './swarm-tools.js';
+import type { SynapticMemory, SynapticEntry } from './synaptic-memory.js';
 
 export interface EnvironmentAgentConfig {
   id: string;
@@ -29,6 +32,7 @@ export interface EnvironmentAgentConfig {
   compileFn: CompileFunction;
   model: Model<Api>;
   maxIterations: number;
+  memory?: SynapticMemory;
 }
 
 const SYSTEM_PROMPT = `You are a swarm agent in a decentralized coding system.
@@ -48,6 +52,14 @@ Your workflow:
 6. If compilation fails, read errors, fix code, compile_check again (up to 3 attempts)
 7. Call submit_solution with your final code, declaring all exports and imports
 
+Memory & Stigmergy:
+- Your synaptic memory (past iterations) may be included in the message below.
+  Use it to avoid repeating failed approaches and build on past successes.
+- Use read_trail_markers to see what OTHER agents tried on a file before you work on it.
+- Use leave_trail_marker to warn about pitfalls or share discoveries for other agents.
+- Trail markers are stigmergy: you communicate by modifying the shared environment,
+  not by talking directly to other agents.
+
 Rules:
 - Always perceive the environment first
 - Always read dependency solutions before writing code that imports from them
@@ -65,6 +77,7 @@ export class EnvironmentAgent {
   private maxIterations: number;
   private tools: Tool[];
   private handlers: SwarmToolHandlers;
+  private memory: SynapticMemory | null;
   private shouldStop: boolean = false;
   private iterationsCompleted: number = 0;
   private successfulSubmits: number = 0;
@@ -74,11 +87,13 @@ export class EnvironmentAgent {
     this.environment = config.environment;
     this.model = config.model;
     this.maxIterations = config.maxIterations;
+    this.memory = config.memory ?? null;
 
     const { tools, handlers } = createSwarmTools(
       config.environment,
       config.compileFn,
-      config.id
+      config.id,
+      config.memory
     );
     this.tools = tools;
     this.handlers = handlers;
@@ -120,12 +135,25 @@ export class EnvironmentAgent {
    * Execute a single iteration: one fresh multi-turn LLM conversation with tool calls
    */
   private async executeIteration(iterationNum: number): Promise<void> {
+    // 1. Read synaptic memory (agent's own past iterations)
+    let memoryBlock = '';
+    if (this.memory) {
+      memoryBlock = await this.memory.readSynapticMemory(this.id);
+    }
+
+    // 2. Build user message with memory injected
+    let userContent = `Iteration ${iterationNum}/${this.maxIterations}. You are agent "${this.id}". Use your tools to contribute to the project. Start by perceiving the environment.`;
+
+    if (memoryBlock) {
+      userContent += `\n\n--- SYNAPTIC MEMORY (your past iterations) ---\n${memoryBlock}\n--- END MEMORY ---\n\nUse this memory to avoid repeating failed approaches. You can also use read_trail_markers to see what other agents tried.`;
+    }
+
     const context: Context = {
       systemPrompt: SYSTEM_PROMPT,
       messages: [
         {
           role: 'user',
-          content: `Iteration ${iterationNum}/${this.maxIterations}. You are agent "${this.id}". Use your tools to contribute to the project. Start by perceiving the environment.`,
+          content: userContent,
           timestamp: Date.now(),
         } as Message,
       ],
@@ -138,6 +166,12 @@ export class EnvironmentAgent {
     let toolCallCount = 0;
     const maxToolCalls = 20; // Safety limit per iteration
 
+    // Track what happened this iteration for memory recording
+    let lastTargetFile = '';
+    let lastQuality: number | null = null;
+    let lastCompilationSuccess: boolean | null = null;
+    let lastCompilationErrors: string[] = [];
+    let lastAction: SynapticEntry['action'] = 'explore';
     while (response.stopReason === 'toolUse' && toolCallCount < maxToolCalls) {
       // Process all tool calls in this response
       for (const item of response.content) {
@@ -147,14 +181,26 @@ export class EnvironmentAgent {
           context.messages.push(result);
           toolCallCount++;
 
-          // Track successful submits
-          if (toolCall.name === 'submit_solution') {
+          // Track what happened for memory
+          const toolArgs = toolCall.arguments as Record<string, any>;
+          if (toolCall.name === 'submit_solution' || toolCall.name === 'compile_check') {
+            lastTargetFile = toolArgs?.file_path ?? '';
+            lastAction = toolCall.name === 'submit_solution' ? 'submit' : 'compile_check';
+
             try {
               const parsed = JSON.parse(
                 (result.content[0] as { type: 'text'; text: string }).text
               );
-              if (parsed.compilationSuccess || parsed.quality >= 0.5) {
-                this.successfulSubmits++;
+              if (toolCall.name === 'submit_solution') {
+                lastQuality = parsed.quality ?? null;
+                lastCompilationSuccess = parsed.compilationSuccess ?? null;
+                lastCompilationErrors = parsed.errors ?? [];
+                if (parsed.compilationSuccess || parsed.quality >= 0.5) {
+                  this.successfulSubmits++;
+                }
+              } else {
+                lastCompilationSuccess = parsed.success ?? null;
+                lastCompilationErrors = parsed.errors ?? [];
               }
             } catch {
               // Ignore parse errors
@@ -166,6 +212,34 @@ export class EnvironmentAgent {
       // Continue the conversation
       response = await complete(this.model, context);
       context.messages.push(response);
+    }
+
+    // 3. Record this iteration to synaptic memory
+    if (this.memory && lastTargetFile) {
+      // Extract a brief approach description from the agent's last text
+      const textParts = response.content
+        .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
+        .map(c => c.text)
+        .join('');
+      const approach = textParts.length > 100
+        ? textParts.substring(0, 100) + '...'
+        : textParts || 'No text summary';
+
+      const outcome = lastQuality !== null
+        ? `quality=${lastQuality.toFixed(2)}, ${lastCompilationSuccess ? 'compiled' : 'compilation failed'}`
+        : 'no submission';
+
+      this.memory.appendSynapticEntry(this.id, {
+        iteration: iterationNum,
+        timestamp: Date.now(),
+        targetFile: lastTargetFile,
+        action: lastAction,
+        quality: lastQuality,
+        compilationSuccess: lastCompilationSuccess,
+        compilationErrors: lastCompilationErrors.slice(0, 3),
+        approach,
+        outcome,
+      });
     }
 
     // Log iteration summary
@@ -209,6 +283,12 @@ export class EnvironmentAgent {
           break;
         case 'read_signals':
           resultText = await this.handlers.read_signals(args as any);
+          break;
+        case 'read_trail_markers':
+          resultText = await this.handlers.read_trail_markers(args as any);
+          break;
+        case 'leave_trail_marker':
+          resultText = await this.handlers.leave_trail_marker(args as any);
           break;
         default:
           resultText = JSON.stringify({ error: `Unknown tool: ${name}` });

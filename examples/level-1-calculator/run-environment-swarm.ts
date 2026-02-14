@@ -73,6 +73,11 @@ async function main() {
     fileConvergenceThreshold: 0.7,
     globalConvergenceThreshold: 0.8,
     scaleCheckInterval: 20000,
+    synapticMemory: {
+      enabled: true,
+      baseDir: __dirname,
+      snapshotInterval: 20000,
+    },
   };
 
   console.log(`Provider: ${provider}`);

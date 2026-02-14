@@ -4,12 +4,17 @@
  * Agents interact with the SwarmEnvironment through these tools.
  * Tools are language-agnostic: compile_check delegates to an injected CompileFunction.
  *
+ * 7 tools total:
+ * - perceive_environment, read_file_solution, submit_solution, compile_check, read_signals
+ * - read_trail_markers, leave_trail_marker (stigmergy — indirect agent communication)
+ *
  * Uses Pi framework's Tool<TSchema> + TypeBox for type-safe tool definitions.
  */
 
 import { Type, type Tool } from '@mariozechner/pi-ai';
 import type { SwarmEnvironment } from './environment.js';
 import type { CompileFunction, SubmitResult, CompileResult } from './types.js';
+import type { SynapticMemory } from './synaptic-memory.js';
 
 /**
  * Handler functions for executing tool calls.
@@ -26,15 +31,18 @@ export interface SwarmToolHandlers {
   }) => Promise<string>;
   compile_check: (args: { file_path: string; code: string }) => Promise<string>;
   read_signals: (args: { file_path?: string }) => Promise<string>;
+  read_trail_markers: (args: { file_path: string }) => Promise<string>;
+  leave_trail_marker: (args: { file_path: string; recommendation: string }) => Promise<string>;
 }
 
 /**
- * Create the 5 swarm tools and their handler functions
+ * Create the swarm tools and their handler functions
  */
 export function createSwarmTools(
   env: SwarmEnvironment,
   compileFn: CompileFunction,
-  agentId: string
+  agentId: string,
+  memory?: SynapticMemory
 ): { tools: Tool[]; handlers: SwarmToolHandlers } {
 
   // --- Tool definitions ---
@@ -86,6 +94,23 @@ export function createSwarmTools(
     description: 'Read active signals (interface mismatches, compilation errors, etc.) for a file or all files. Signals indicate problems that need fixing.',
     parameters: Type.Object({
       file_path: Type.Optional(Type.String({ description: 'If set, only return signals for this file' })),
+    }),
+  };
+
+  const readTrailMarkersTool: Tool = {
+    name: 'read_trail_markers',
+    description: 'Read trail markers left by other agents on a file. Shows what approaches were tried, what worked/failed, and recommendations. Use this before working on a file to avoid repeating failed approaches. This is stigmergy — indirect communication through the shared environment.',
+    parameters: Type.Object({
+      file_path: Type.String({ description: 'The file to read trail markers for' }),
+    }),
+  };
+
+  const leaveTrailMarkerTool: Tool = {
+    name: 'leave_trail_marker',
+    description: 'Leave a trail marker (recommendation note) on a file for other agents to read. Use this to warn about pitfalls, suggest approaches, or share discoveries. This is stigmergy — communicating by modifying the shared environment.',
+    parameters: Type.Object({
+      file_path: Type.String({ description: 'The file to leave a marker on' }),
+      recommendation: Type.String({ description: 'Your recommendation or observation about this file' }),
     }),
   };
 
@@ -214,6 +239,25 @@ export function createSwarmTools(
         compatibilityScore,
       });
 
+      // Auto-deposit trail marker on submission (stigmergy)
+      if (memory) {
+        memory.depositTrailMarker(args.file_path, {
+          agentId,
+          timestamp: Date.now(),
+          iteration: 0, // Will be overridden by agent if available
+          quality,
+          compilationSuccess,
+          compilationErrors: compilationErrors.slice(0, 3),
+          exports: args.declared_exports,
+          recommendation: compilationSuccess
+            ? `Compiles OK. Exports: [${args.declared_exports.join(', ')}]`
+            : `Compilation failed: ${compilationErrors[0] ?? 'unknown error'}`,
+        });
+
+        // Log to quality evolution
+        memory.appendQualityEvent(args.file_path, agentId, quality, compilationSuccess);
+      }
+
       const result: SubmitResult = {
         quality,
         compilationSuccess,
@@ -262,6 +306,34 @@ export function createSwarmTools(
         })),
       }, null, 2);
     },
+
+    async read_trail_markers(args) {
+      if (!memory) {
+        return JSON.stringify({ markers: [], message: 'Synaptic memory not enabled' });
+      }
+      const content = await memory.readTrailMarkers(args.file_path);
+      if (!content) {
+        return JSON.stringify({ markers: [], message: `No trail markers for ${args.file_path}` });
+      }
+      return content;
+    },
+
+    async leave_trail_marker(args) {
+      if (!memory) {
+        return JSON.stringify({ status: 'skipped', message: 'Synaptic memory not enabled' });
+      }
+      memory.depositTrailMarker(args.file_path, {
+        agentId,
+        timestamp: Date.now(),
+        iteration: 0,
+        quality: 0,
+        compilationSuccess: false,
+        compilationErrors: [],
+        exports: [],
+        recommendation: args.recommendation,
+      });
+      return JSON.stringify({ status: 'ok', message: `Trail marker left on ${args.file_path}` });
+    },
   };
 
   const tools: Tool[] = [
@@ -270,6 +342,8 @@ export function createSwarmTools(
     submitSolutionTool,
     compileCheckTool,
     readSignalsTool,
+    readTrailMarkersTool,
+    leaveTrailMarkerTool,
   ];
 
   return { tools, handlers };

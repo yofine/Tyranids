@@ -456,6 +456,23 @@ export interface EnvironmentSwarmConfig extends SwarmConfig {
   fileConvergenceThreshold: number;
   globalConvergenceThreshold: number;
   scaleCheckInterval: number;
+  synapticMemory?: SynapticMemoryConfig;
+}
+
+/**
+ * Configuration for the synaptic memory system (filesystem persistence)
+ */
+export interface SynapticMemoryConfig {
+  /** Base directory for .swarm-memory/, defaults to cwd */
+  baseDir?: string;
+  /** Max synaptic entries to inject into agent context per iteration (default 10) */
+  maxSynapticEntries?: number;
+  /** Max trail markers per file to return (default 5) */
+  maxTrailMarkers?: number;
+  /** Hive state snapshot interval in ms (default 30000) */
+  snapshotInterval?: number;
+  /** Enable/disable the memory system (default true) */
+  enabled?: boolean;
 }
 
 /**

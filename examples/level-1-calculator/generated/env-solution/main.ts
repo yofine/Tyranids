@@ -1,44 +1,54 @@
-/**
- * Main CLI entry point for the arithmetic expression evaluator
- * Imports: tokenize from tokenizer.ts, parse from parser.ts, evaluate from evaluator.ts
- * Reads input, runs the pipeline, prints the result
- */
-
 import { tokenize } from './tokenizer';
 import { parse } from './parser';
 import { evaluate } from './evaluator';
 
 /**
- * Main function - reads expression from stdin, evaluates, prints result
+ * Main CLI entry point for the expression evaluator
  */
-async function main(): Promise<void> {
-  // Read all input from stdin
-  const input: string = await new Promise((resolve) => {
-    let data = '';
+function main() {
+  // Read input from command line arguments or stdin
+  const args = process.argv.slice(2);
+  
+  if (args.length === 0) {
+    // Read from stdin if no arguments provided
+    let input = '';
     process.stdin.setEncoding('utf8');
-    process.stdin.on('data', (chunk: string) => { data += chunk; });
-    process.stdin.on('end', () => resolve(data.trim()));
-  });
-
-  if (!input) {
-    console.log('Usage: Enter an arithmetic expression to evaluate');
-    console.log('Example: 2 + 3 * 4');
-    return;
-  }
-
-  try {
-    // Run the pipeline: tokenize -> parse -> evaluate
-    const tokens = tokenize(input);
-    const ast = parse(tokens);
-    const result = evaluate(ast);
     
-    // Print the result
-    console.log(result.toString());
-  } catch (error) {
-    console.error(`Error: ${error instanceof Error ? error.message : error}`);
-    process.exit(1);
+    process.stdin.on('data', (chunk) => {
+      input += chunk;
+    });
+    
+    process.stdin.on('end', () => {
+      try {
+        const result = evaluateExpression(input.trim());
+        console.log(result);
+      } catch (error) {
+        console.error('Error:', (error as Error).message);
+        process.exit(1);
+      }
+    });
+  } else {
+    // Use command line argument
+    try {
+      const result = evaluateExpression(args.join(' '));
+      console.log(result);
+    } catch (error) {
+      console.error('Error:', (error as Error).message);
+      process.exit(1);
+    }
   }
 }
 
-// Run main function
+/**
+ * Evaluate a mathematical expression string
+ * @param input - The expression string to evaluate
+ * @returns The numeric result
+ */
+function evaluateExpression(input: string): number {
+  const tokens = tokenize(input);
+  const ast = parse(tokens);
+  return evaluate(ast);
+}
+
+// Run main if this is the main module
 main();

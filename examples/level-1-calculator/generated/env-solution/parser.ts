@@ -1,113 +1,111 @@
 import { Token, TokenType } from './tokenizer';
 
-/**
- * AST Node types for arithmetic expressions
- */
-export type ASTNode = 
-  | { type: 'NUMBER'; value: number }
-  | { type: 'BINARY'; operator: TokenType; left: ASTNode; right: ASTNode };
+export interface ASTNode {
+  type: 'NumberLiteral' | 'BinaryExpression' | 'UnaryExpression';
+  value?: number;
+  operator?: string;
+  left?: ASTNode;
+  right?: ASTNode;
+  operand?: ASTNode;
+}
 
-/**
- * Parser for arithmetic expressions
- * Implements a recursive descent parser with operator precedence
- */
 export function parse(tokens: Token[]): ASTNode {
   let pos = 0;
-  
-  /**
-   * Get current token or EOF
-   */
-  function current(): Token {
-    return pos < tokens.length ? tokens[pos] : { type: 'EOF', value: '', position: 0 };
+
+  function peek(): Token {
+    return tokens[pos];
   }
-  
-  /**
-   * Consume a token if it matches the expected type
-   */
-  function consume(expectedType: TokenType): boolean {
-    if (current().type === expectedType) {
-      pos++;
-      return true;
+
+  function consume(): Token {
+    const token = tokens[pos];
+    pos++;
+    return token;
+  }
+
+  function expect(type: TokenType): Token {
+    const token = peek();
+    if (token.type !== type) {
+      throw new Error('Expected ' + type + ' but got ' + token.type);
     }
-    return false;
+    return consume();
   }
-  
-  /**
-   * Parse a number literal
-   */
-  function parseNumber(): ASTNode {
-    const token = current();
+
+  function parseExpression(): ASTNode {
+    return parseAddition();
+  }
+
+  function parseAddition(): ASTNode {
+    let left = parseMultiplication();
+
+    while (peek().type === 'PLUS' || peek().type === 'MINUS') {
+      const op = consume();
+      const right = parseMultiplication();
+      left = {
+        type: 'BinaryExpression',
+        operator: op.value,
+        left: left,
+        right: right
+      };
+    }
+
+    return left;
+  }
+
+  function parseMultiplication(): ASTNode {
+    let left = parseUnary();
+
+    while (peek().type === 'MULTIPLY' || peek().type === 'DIVIDE') {
+      const op = consume();
+      const right = parseUnary();
+      left = {
+        type: 'BinaryExpression',
+        operator: op.value,
+        left: left,
+        right: right
+      };
+    }
+
+    return left;
+  }
+
+  function parseUnary(): ASTNode {
+    if (peek().type === 'MINUS') {
+      consume();
+      const operand = parseUnary();
+      return {
+        type: 'UnaryExpression',
+        operator: '-',
+        operand: operand
+      };
+    }
+    if (peek().type === 'PLUS') {
+      consume();
+      return parseUnary();
+    }
+    return parsePrimary();
+  }
+
+  function parsePrimary(): ASTNode {
+    const token = peek();
+
     if (token.type === 'NUMBER') {
-      pos++;
-      return { type: 'NUMBER', value: parseFloat(token.value) };
+      consume();
+      return {
+        type: 'NumberLiteral',
+        value: parseFloat(token.value)
+      };
     }
-    throw new Error(`Expected number, got ${token.type}`);
-  }
-  
-  /**
-   * Parse parenthesized expression
-   */
-  function parseParenthesized(): ASTNode {
-    if (consume('LPAREN')) {
+
+    if (token.type === 'LPAREN') {
+      consume();
       const expr = parseExpression();
-      if (!consume('RPAREN')) {
-        throw new Error('Expected closing parenthesis');
-      }
+      expect('RPAREN');
       return expr;
     }
-    return parseNumber();
+
+    throw new Error('Unexpected token: ' + token.type);
   }
-  
-  /**
-   * Parse factor (handles unary minus and parenthesized expressions)
-   */
-  function parseFactor(): ASTNode {
-    if (consume('MINUS')) {
-      const operand = parseFactor();
-      return { type: 'BINARY', operator: 'MINUS', left: { type: 'NUMBER', value: 0 }, right: operand };
-    }
-    return parseParenthesized();
-  }
-  
-  /**
-   * Parse term (handles multiplication and division)
-   */
-  function parseTerm(): ASTNode {
-    let left = parseFactor();
-    
-    while (current().type === 'MULTIPLY' || current().type === 'DIVIDE') {
-      const operator = current().type;
-      pos++;
-      const right = parseFactor();
-      left = { type: 'BINARY', operator, left, right };
-    }
-    
-    return left;
-  }
-  
-  /**
-   * Parse expression (handles addition and subtraction)
-   */
-  function parseExpression(): ASTNode {
-    let left = parseTerm();
-    
-    while (current().type === 'PLUS' || current().type === 'MINUS') {
-      const operator = current().type;
-      pos++;
-      const right = parseTerm();
-      left = { type: 'BINARY', operator, left, right };
-    }
-    
-    return left;
-  }
-  
-  // Parse the expression
-  const result = parseExpression();
-  
-  // Ensure we consumed all tokens
-  if (current().type !== 'EOF') {
-    throw new Error(`Unexpected token: ${current().type}`);
-  }
-  
-  return result;
+
+  const ast = parseExpression();
+  return ast;
 }

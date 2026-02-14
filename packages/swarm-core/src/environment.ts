@@ -38,14 +38,18 @@ export class SwarmEnvironment {
   private globalConvergenceThreshold: number;
   /** Tracks which agents are actively working on which files */
   private activeAgents: Map<string, Set<string>> = new Map();
+  /** Optional event callback for real-time UI */
+  private onEvent: ((event: { type: string; data: Record<string, unknown> }) => void) | null = null;
 
   constructor(options?: {
     evaporationRate?: number;
     fileConvergenceThreshold?: number;
     globalConvergenceThreshold?: number;
+    onEvent?: (event: { type: string; data: Record<string, unknown> }) => void;
   }) {
     this.evaporationRate = options?.evaporationRate ?? 0.05;
     this.globalConvergenceThreshold = options?.globalConvergenceThreshold ?? 0.8;
+    this.onEvent = options?.onEvent ?? null;
   }
 
   /**
@@ -178,6 +182,9 @@ export class SwarmEnvironment {
         `[Environment] Reinforced solution for ${deposit.filePath} ` +
         `(quality: ${similar.quality.toFixed(2)}, depositors: ${similar.depositors.length}, agent: ${deposit.agentId})`
       );
+      this.onEvent?.({ type: 'solution_reinforced', data: {
+        file: deposit.filePath, quality: similar.quality, depositors: similar.depositors.length,
+      }});
     } else {
       // New pheromone
       const pheromone: SpatialPheromone = {
@@ -210,6 +217,9 @@ export class SwarmEnvironment {
         `[Environment] New solution for ${deposit.filePath} ` +
         `(quality: ${deposit.quality.toFixed(2)}, exports: [${deposit.exports.join(', ')}], agent: ${deposit.agentId})`
       );
+      this.onEvent?.({ type: 'solution_submitted', data: {
+        agentId: deposit.agentId, file: deposit.filePath, quality: deposit.quality,
+      }});
     }
 
     // Check imports, reverse check, recompute status

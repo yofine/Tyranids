@@ -1,11 +1,12 @@
 /**
  * EnvironmentOrchestrator - Minimal orchestrator with elastic scaling
  *
- * Three responsibilities + scaling:
+ * Four responsibilities + memory:
  * 1. Seed — create FileSlots + dependency edges
  * 2. Spawn — create initial agents
  * 3. Monitor — poll environment, print progress, check convergence
  * 4. Scale — add/remove agents based on environment.getScalingAdvice()
+ * 5. Memory — manage synaptic memory lifecycle (initialize, snapshot, flush)
  *
  * The orchestrator does NOT assign tasks or tell agents what to do.
  * Agents self-organize through the environment.
@@ -15,6 +16,7 @@ import { getModel, type Model, type Api } from '@mariozechner/pi-ai';
 import { SwarmEnvironment } from './environment.js';
 import { EnvironmentAgent } from './environment-agent.js';
 import { createTypeScriptCompileFn } from './evaluator.js';
+import { SynapticMemory } from './synaptic-memory.js';
 import type {
   EnvironmentTask,
   EnvironmentSwarmConfig,
@@ -27,6 +29,8 @@ export interface EnvironmentOrchestratorConfig {
   provider?: string;
   modelName?: string;
   compileFn?: CompileFunction;
+  /** Optional event callback for real-time UI integration */
+  onEvent?: (event: { type: string; data: Record<string, unknown> }) => void;
 }
 
 export class EnvironmentOrchestrator {
@@ -40,6 +44,9 @@ export class EnvironmentOrchestrator {
   private model: Model<Api>;
   private agentIdCounter: number = 0;
   private evaporationTimer: ReturnType<typeof setInterval> | null = null;
+  private snapshotTimer: ReturnType<typeof setInterval> | null = null;
+  private memory: SynapticMemory | null = null;
+  private onEvent: ((event: { type: string; data: Record<string, unknown> }) => void) | null = null;
 
   constructor(params: EnvironmentOrchestratorConfig) {
     this.config = params.swarmConfig;
@@ -52,6 +59,7 @@ export class EnvironmentOrchestrator {
       evaporationRate: this.config.evaporationRate,
       fileConvergenceThreshold: this.config.fileConvergenceThreshold,
       globalConvergenceThreshold: this.config.globalConvergenceThreshold,
+      onEvent: this.onEvent ?? undefined,
     });
 
     // Create model
@@ -63,6 +71,15 @@ export class EnvironmentOrchestrator {
         ...this.model,
         baseUrl: 'https://api.minimaxi.com/anthropic',
       };
+    }
+
+    // Store event callback
+    this.onEvent = params.onEvent ?? null;
+
+    // Initialize synaptic memory if enabled
+    const memConfig = this.config.synapticMemory;
+    if (memConfig?.enabled !== false && memConfig) {
+      this.memory = new SynapticMemory(memConfig);
     }
   }
 
@@ -78,12 +95,18 @@ export class EnvironmentOrchestrator {
     console.log(`Files: ${this.task.fileSlots.length}`);
     console.log(`Agents: ${this.config.minAgents}-${this.config.maxAgents}`);
     console.log(`Provider: ${this.provider} / ${this.modelName}`);
+    console.log(`Synaptic Memory: ${this.memory ? 'ENABLED' : 'disabled'}`);
     console.log(`========================\n`);
 
     // 1. Seed the environment
     this.environment.seed(this.task);
 
-    // 2. Spawn initial agents
+    // 2. Initialize synaptic memory
+    if (this.memory) {
+      await this.memory.initialize();
+    }
+
+    // 3. Spawn initial agents
     const initialCount = Math.min(this.config.maxAgents, this.config.agentCount);
     for (let i = 0; i < initialCount; i++) {
       this.spawnAgent();
@@ -91,10 +114,13 @@ export class EnvironmentOrchestrator {
 
     console.log(`\nSpawned ${this.agents.length} initial agents\n`);
 
-    // 3. Start evaporation timer
+    // 4. Start evaporation timer
     this.startEvaporation();
 
-    // 4. Run agents + monitor in parallel
+    // 5. Start hive state snapshot timer
+    this.startHiveStateSnapshots();
+
+    // 6. Run agents + monitor in parallel
     const agentPromises = this.agents.map(a => a.execute());
     const monitorPromise = this.monitorAndScale();
 
@@ -104,13 +130,13 @@ export class EnvironmentOrchestrator {
       monitorPromise,
     ]);
 
-    // 5. Stop everything
+    // 7. Stop everything
     this.stopAll();
 
     // Wait a moment for agents to finish current tool calls
     await new Promise(resolve => setTimeout(resolve, 2000));
 
-    // 6. Collect results
+    // 8. Collect results
     const results = new Map<string, string>();
     for (const slot of this.environment.getAllFileSlots()) {
       const best = this.environment.getBestSolution(slot.filePath);
@@ -119,9 +145,16 @@ export class EnvironmentOrchestrator {
       }
     }
 
-    // 7. Print final status
+    // 9. Print final status
     const duration = Date.now() - startTime;
     this.printFinalReport(results, duration);
+
+    // 10. Final memory snapshot and flush
+    if (this.memory) {
+      this.memory.snapshotHiveState(this.environment);
+      this.memory.snapshotDependencyMap(this.environment);
+      await this.memory.flush();
+    }
 
     return results;
   }
@@ -159,6 +192,7 @@ export class EnvironmentOrchestrator {
       const advice = this.environment.getScalingAdvice(activeAgents.length);
       if (advice.action === 'scale_up' && this.agents.length < this.config.maxAgents) {
         console.log(`[Monitor] Scaling UP: ${advice.reason}`);
+        this.onEvent?.({ type: 'scaling', data: { direction: 'up', from: this.agents.length, reason: advice.reason } });
         const newAgent = this.spawnAgent();
         // Start the new agent (fire and forget)
         newAgent.execute().catch(err =>
@@ -166,12 +200,17 @@ export class EnvironmentOrchestrator {
         );
       } else if (advice.action === 'scale_down' && this.agents.length > this.config.minAgents) {
         console.log(`[Monitor] Scaling DOWN: ${advice.reason}`);
+        this.onEvent?.({ type: 'scaling', data: { direction: 'down', from: this.agents.length, reason: advice.reason } });
         this.retireAgent();
       }
     }
 
     if (this.environment.hasConverged()) {
       console.log(`\n[Monitor] Environment has converged!`);
+      this.onEvent?.({ type: 'convergence_update', data: {
+        percentage: 100,
+        converged: true,
+      }});
     }
   }
 
@@ -186,10 +225,12 @@ export class EnvironmentOrchestrator {
       compileFn: this.compileFn,
       model: this.model,
       maxIterations: this.config.maxIterations,
+      memory: this.memory ?? undefined,
     });
 
     this.agents.push(agent);
     console.log(`[Orchestrator] Spawned ${id}`);
+    this.onEvent?.({ type: 'agent_spawned', data: { agentId: id, total: this.agents.length } });
     return agent;
   }
 
@@ -213,6 +254,7 @@ export class EnvironmentOrchestrator {
     if (worst) {
       console.log(`[Orchestrator] Retiring ${worst.getId()} (${worstSubmits} successful submits)`);
       worst.stop();
+      this.onEvent?.({ type: 'agent_retired', data: { agentId: worst.getId(), submits: worstSubmits } });
     }
   }
 
@@ -233,6 +275,18 @@ export class EnvironmentOrchestrator {
   }
 
   /**
+   * Start periodic hive state snapshots to markdown
+   */
+  private startHiveStateSnapshots(): void {
+    if (!this.memory) return;
+    const interval = this.config.synapticMemory?.snapshotInterval ?? 30000;
+    this.snapshotTimer = setInterval(() => {
+      this.memory!.snapshotHiveState(this.environment);
+      this.memory!.snapshotDependencyMap(this.environment);
+    }, interval);
+  }
+
+  /**
    * Stop all agents and timers
    */
   private stopAll(): void {
@@ -240,6 +294,12 @@ export class EnvironmentOrchestrator {
     if (this.evaporationTimer) {
       clearInterval(this.evaporationTimer);
       this.evaporationTimer = null;
+    }
+
+    // Stop snapshot timer
+    if (this.snapshotTimer) {
+      clearInterval(this.snapshotTimer);
+      this.snapshotTimer = null;
     }
 
     // Stop all agents and deregister from environment
@@ -275,6 +335,9 @@ export class EnvironmentOrchestrator {
 
     const totalSubmits = this.agents.reduce((sum, a) => sum + a.getSuccessfulSubmits(), 0);
     console.log(`\nTotal successful submits: ${totalSubmits}`);
+    if (this.memory) {
+      console.log(`Synaptic memory: .swarm-memory/`);
+    }
     console.log(`====================\n`);
   }
 
