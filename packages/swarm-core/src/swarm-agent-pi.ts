@@ -32,8 +32,8 @@ export interface SwarmAgentPiConfig {
   explorationRate?: number;
   /** Model to use */
   modelName?: string;
-  /** Provider to use */
-  provider?: 'anthropic' | 'openai' | 'google';
+  /** Provider to use (or any string for Pi-supported providers) */
+  provider?: string;
 }
 
 export class SwarmAgentPi extends Agent {
@@ -63,6 +63,14 @@ export class SwarmAgentPi extends Agent {
     const provider = config.provider || 'anthropic';
     const modelName = config.modelName || 'claude-haiku-4-5-20241022';
     this.model = getModel(provider as any, modelName as any) as Model<Api>;
+
+    // 修复 Minimax baseUrl（Pi 框架使用 .io 但实际应该是 .com）
+    if (provider === 'minimax' && this.model.baseUrl?.includes('minimax.io')) {
+      this.model = {
+        ...this.model,
+        baseUrl: 'https://api.minimaxi.com/anthropic',
+      };
+    }
   }
 
   /**
@@ -251,7 +259,9 @@ export class SwarmAgentPi extends Agent {
     const fullText = textParts.join('\n');
 
     // 提取代码块
-    return this.extractCode(fullText);
+    const code = this.extractCode(fullText);
+
+    return code;
   }
 
   /**

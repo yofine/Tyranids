@@ -21,8 +21,22 @@ export {
 export { SwarmAgentPi, type SwarmAgentPiConfig } from './swarm-agent-pi.js';
 export { SwarmObserver } from './observer.js';
 
+// Multi-file support (Level 1+)
+export { MultiFilePheromonePool } from './multi-file-pheromone-pool.js';
+export { MultiFileSwarmAgent, type MultiFileSwarmAgentConfig } from './multi-file-agent.js';
+
 // Bioengine - Gene Devouring & Evolution System
 export * from './bioengine/index.js';
+
+// Environment-based swarm (v2)
+export { SwarmEnvironment } from './environment.js';
+export { createSwarmTools } from './swarm-tools.js';
+export { EnvironmentAgent, type EnvironmentAgentConfig } from './environment-agent.js';
+export {
+  EnvironmentOrchestrator,
+  type EnvironmentOrchestratorConfig,
+} from './environment-orchestrator.js';
+export { createTypeScriptCompileFn } from './evaluator.js';
 
 // Version
 export const VERSION = '0.1.0';

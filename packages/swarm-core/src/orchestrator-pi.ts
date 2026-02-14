@@ -25,8 +25,8 @@ export interface SwarmOrchestratorPiConfig {
   config: SwarmConfig;
   /** Coding task */
   task: CodingTask;
-  /** Provider to use */
-  provider?: 'anthropic' | 'openai' | 'google';
+  /** Provider to use (or any string for Pi-supported providers) */
+  provider?: 'anthropic' | 'openai' | 'google' | string;
   /** Enable bioengine evolution (default: true) */
   enableEvolution?: boolean;
 }
@@ -36,7 +36,7 @@ export class SwarmOrchestratorPi {
   private agents: SwarmAgentPi[] = [];
   private config: SwarmConfig;
   private task: CodingTask;
-  private provider: 'anthropic' | 'openai' | 'google';
+  private provider: string;
   public observer: SwarmObserver;
   private bioEngine: TyranidBioEngine;
   private enableEvolution: boolean;
@@ -124,16 +124,32 @@ export class SwarmOrchestratorPi {
     console.log(`🧬 派生 ${this.config.agentCount} 个虫子...`);
 
     for (let i = 0; i < this.config.agentCount; i++) {
+      // 根据 provider 选择模型
+      let modelName: string;
+      if (this.provider === 'minimax') {
+        modelName = 'MiniMax-M2.1'; // Minimax 最新模型
+      } else if (this.provider === 'openai') {
+        modelName = this.config.modelPreference === 'sonnet-preferred'
+          ? 'gpt-4o'
+          : 'gpt-4o-mini';
+      } else if (this.provider === 'google') {
+        modelName = this.config.modelPreference === 'sonnet-preferred'
+          ? 'gemini-2.0-flash-exp'
+          : 'gemini-2.0-flash-exp';
+      } else {
+        // Anthropic (default)
+        modelName = this.config.modelPreference === 'sonnet-preferred'
+          ? 'claude-sonnet-4-5-20250929'
+          : 'claude-haiku-4-5-20241022';
+      }
+
       const agent = new SwarmAgentPi({
         id: `agent-${i}`,
         pheromonePool: this.pheromonePool,
         task: this.task,
         explorationRate: this.config.explorationRate,
         provider: this.provider,
-        modelName:
-          this.config.modelPreference === 'sonnet-preferred'
-            ? 'claude-sonnet-4-5-20250929'
-            : 'claude-haiku-4-5-20241022',
+        modelName,
       });
 
       this.agents.push(agent);

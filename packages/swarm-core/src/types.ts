@@ -20,6 +20,18 @@ export interface CodeFragment {
 }
 
 /**
+ * Multi-file code solution (for Level 1+)
+ */
+export interface MultiFileCodeFragment {
+  /** All files in this solution */
+  files: CodeFragment[];
+  /** Overall intent of the solution */
+  intent: string;
+  /** Main entry file path */
+  entryFile?: string;
+}
+
+/**
  * Pheromone deposited by agents to communicate solution quality
  * Inspired by ant colony optimization
  */
@@ -39,6 +51,29 @@ export interface Pheromone {
     compilationSuccess?: boolean;
     testsPass?: boolean;
     complexity?: number;
+  };
+}
+
+/**
+ * Multi-file pheromone (for Level 1+)
+ */
+export interface MultiFilePheromone {
+  /** Unique identifier */
+  id: string;
+  /** Multi-file code solution */
+  solution: MultiFileCodeFragment;
+  /** Quality score (0-1, higher is better) */
+  quality: number;
+  /** IDs of agents who deposited/reinforced this pheromone */
+  depositors: string[];
+  /** When this pheromone was created */
+  timestamp: number;
+  /** Metadata for analysis */
+  metadata?: {
+    compilationSuccess?: boolean;
+    testsPass?: boolean;
+    complexity?: number;
+    crossFileConsistency?: number;  // How well files work together
   };
 }
 
@@ -67,6 +102,25 @@ export interface CodingTask {
   /** Base code (original content) */
   baseCode: string;
   /** Task type classification */
+  type?: 'add-feature' | 'refactor' | 'bugfix' | 'optimize' | 'unknown';
+}
+
+/**
+ * Multi-file coding task (for Level 1+)
+ */
+export interface MultiFileCodingTask {
+  /** Task description */
+  description: string;
+  /** Project name */
+  projectName: string;
+  /** Base files (existing code if any) */
+  baseFiles?: { [filePath: string]: string };
+  /** Expected file structure (optional guidance) */
+  expectedStructure?: {
+    filePath: string;
+    description: string;
+  }[];
+  /** Task type */
   type?: 'add-feature' | 'refactor' | 'bugfix' | 'optimize' | 'unknown';
 }
 
@@ -187,4 +241,246 @@ export interface SwarmMetrics {
   convergenceDetected: boolean;
   convergenceIteration: number;
   finalConvergenceRatio: number;
+}
+
+/**
+ * Hierarchical task - decomposed into phases
+ */
+export interface HierarchicalTask {
+  /** Task description */
+  description: string;
+  /** Project name */
+  projectName: string;
+  /** Task phases (will be auto-generated or manually defined) */
+  phases?: TaskPhase[];
+  /** Expected file structure */
+  expectedStructure?: {
+    filePath: string;
+    description: string;
+  }[];
+}
+
+/**
+ * Task phase in hierarchical execution
+ */
+export interface TaskPhase {
+  /** Phase name (e.g., 'interface-design', 'tokenizer-impl') */
+  name: string;
+  /** Phase objective */
+  objective: string;
+  /** Dependencies (phase names that must complete before this) */
+  dependencies: string[];
+  /** Files to generate in this phase */
+  assignedFiles: string[];
+  /** Number of agents for this phase */
+  agentCount: number;
+  /** Max iterations per agent */
+  maxIterations: number;
+}
+
+/**
+ * Context passed between phases
+ */
+export interface PhaseContext {
+  /** Files completed by previous phases */
+  completedFiles: { [filePath: string]: string };
+  /** Exported interfaces from previous phases */
+  interfaces: { [name: string]: string };
+}
+
+/**
+ * Result of a phase execution
+ */
+export interface PhaseResult {
+  /** Phase name */
+  phaseName: string;
+  /** Generated files */
+  files: { [filePath: string]: string };
+  /** Exported interfaces (for next phases) */
+  exportedInterfaces: { [name: string]: string };
+  /** Quality score */
+  quality: number;
+  /** Execution time */
+  duration: number;
+  /** Number of solutions explored */
+  solutionsExplored: number;
+}
+
+// ============================================================
+// Environment-based swarm types (v2)
+// ============================================================
+
+/**
+ * File slot status in the environment
+ */
+export type SlotStatus = 'empty' | 'attempted' | 'partial' | 'solid' | 'excellent' | 'blocked';
+
+/**
+ * A spatial coordinate in the environment — each file is a "region"
+ */
+export interface FileSlot {
+  filePath: string;
+  description: string;
+  bestSolutionId: string | null;
+  bestQuality: number;
+  dependsOn: string[];
+  dependedBy: string[];
+  status: SlotStatus;
+}
+
+/**
+ * Spatial pheromone — a code solution anchored to a file
+ */
+export interface SpatialPheromone {
+  id: string;
+  filePath: string;
+  code: string;
+  quality: number;
+  strength: number;
+  depositors: string[];
+  createdAt: number;
+  updatedAt: number;
+  /** Agent-declared export names (language-agnostic strings) */
+  exports: string[];
+  /** Agent-declared imports */
+  imports: { name: string; fromFile: string }[];
+  compatibilityScore: number;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Data submitted by an agent when depositing a solution
+ */
+export interface SolutionDeposit {
+  filePath: string;
+  code: string;
+  agentId: string;
+  quality: number;
+  /** Agent-declared export names (language-agnostic strings) */
+  exports: string[];
+  /** Agent-declared imports */
+  imports: { name: string; fromFile: string }[];
+  compilationSuccess: boolean;
+  compilationErrors?: string[];
+  compatibilityScore: number;
+}
+
+/**
+ * Signal type in the environment
+ */
+export type SignalType =
+  | 'interface_mismatch'
+  | 'compilation_error'
+  | 'integration_failure'
+  | 'dependency_ready'
+  | 'needs_attention';
+
+/**
+ * Non-code signal pheromone
+ */
+export interface SignalPheromone {
+  id: string;
+  type: SignalType;
+  filePath: string;
+  message: string;
+  severity: 'low' | 'medium' | 'high';
+  strength: number;
+  createdAt: number;
+  sourceAgent: string;
+}
+
+/**
+ * Detail about compatibility with a specific dependency
+ */
+export interface CompatibilityDetail {
+  filePath: string;
+  compatible: boolean;
+  missingImports: string[];
+}
+
+/**
+ * What an agent perceives when observing the environment
+ */
+export interface EnvironmentPerception {
+  fileSlots: {
+    filePath: string;
+    description: string;
+    status: SlotStatus;
+    bestQuality: number;
+    dependsOn: string[];
+    dependedBy: string[];
+    signalCount: number;
+    /** Number of agents currently working on this file */
+    activeAgentCount: number;
+    /** Total solutions deposited for this file */
+    solutionCount: number;
+    /** Work recommendation for agents (e.g., "HIGH PRIORITY", "AVOID") */
+    recommendation: string;
+  }[];
+  globalProgress: {
+    totalFiles: number;
+    solidOrBetter: number;
+    convergence: number;
+  };
+}
+
+/**
+ * Scaling advice returned by the environment
+ */
+export interface ScalingAdvice {
+  action: 'scale_up' | 'scale_down' | 'hold';
+  reason: string;
+}
+
+/**
+ * Task definition for the environment-based swarm
+ */
+export interface EnvironmentTask {
+  description: string;
+  projectName: string;
+  fileSlots: {
+    filePath: string;
+    description: string;
+    dependsOn: string[];
+  }[];
+}
+
+/**
+ * Configuration for environment-based swarm
+ */
+export interface EnvironmentSwarmConfig extends SwarmConfig {
+  minAgents: number;
+  maxAgents: number;
+  evaporationRate: number;
+  evaporationInterval: number;
+  fileConvergenceThreshold: number;
+  globalConvergenceThreshold: number;
+  scaleCheckInterval: number;
+}
+
+/**
+ * Pluggable compile function (language-agnostic)
+ */
+export type CompileFunction = (
+  filePath: string,
+  code: string,
+  contextFiles: Map<string, string>
+) => Promise<{ success: boolean; errors: string[] }>;
+
+/**
+ * Result of a compilation check
+ */
+export interface CompileResult {
+  success: boolean;
+  errors: string[];
+}
+
+/**
+ * Result returned to agent after submitting a solution
+ */
+export interface SubmitResult {
+  quality: number;
+  compilationSuccess: boolean;
+  errors: string[];
+  compatibilityScore: number;
 }

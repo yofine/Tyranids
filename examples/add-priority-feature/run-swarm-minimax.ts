@@ -7,7 +7,11 @@
 import { SwarmOrchestratorPi } from '@tyranids/swarm-core';
 import type { CodingTask, SwarmConfig } from '@tyranids/swarm-core';
 import { readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 async function main() {
   console.log('🐝 Tyranids 虫群系统 - Minimax 版本\n');
@@ -20,13 +24,14 @@ async function main() {
   }
 
   if (!process.env.MINIMAX_GROUP_ID) {
-    console.error('❌ 错误: 未设置 MINIMAX_GROUP_ID 环境变量');
-    console.error('请运行: export MINIMAX_GROUP_ID="your-group-id"');
-    process.exit(1);
+    console.warn('⚠️  警告: 未设置 MINIMAX_GROUP_ID 环境变量');
+    console.warn('某些 Minimax 配置可能需要 Group ID');
+    console.warn('如果遇到错误,请设置: export MINIMAX_GROUP_ID="your-group-id"\n');
   }
 
-  // 读取原始代码
-  const baseCode = await readFile(join(__dirname, 'todo.ts'), 'utf-8');
+  // 读取原始代码（从源代码目录，不是 dist 目录）
+  const srcDir = join(__dirname, '..');
+  const baseCode = await readFile(join(srcDir, 'todo.ts'), 'utf-8');
 
   // 定义任务
   const task: CodingTask = {
@@ -44,7 +49,7 @@ async function main() {
 - 使用枚举 (enum Priority)
 
 注意: 只返回完整的修改后的代码,不要解释。`,
-    filePath: join(__dirname, 'todo.ts'),
+    filePath: join(srcDir, 'todo.ts'),
     baseCode,
     type: 'add-feature',
   };
@@ -66,10 +71,11 @@ async function main() {
   console.log(`- 模型偏好: ${config.modelPreference}\n`);
 
   // 创建编排器 (使用 Minimax)
+  // 注意: Pi 框架可能支持 minimax,但类型定义未包含,使用 as any 绕过
   const orchestrator = new SwarmOrchestratorPi({
     config,
     task,
-    provider: 'minimax', // 关键: 设置为 'minimax'
+    provider: 'minimax' as any, // 绕过 TypeScript 类型检查
   });
 
   // 执行虫群
@@ -77,13 +83,13 @@ async function main() {
   const topSolutions = await orchestrator.execute();
   const duration = (Date.now() - startTime) / 1000;
 
-  // 保存结果
+  // 保存结果（保存到源代码目录的 generated 文件夹）
   console.log('\n💾 保存结果...\n');
 
   for (let i = 0; i < Math.min(3, topSolutions.length); i++) {
     const solution = topSolutions[i];
     const filename = `generated-solution-minimax-${i + 1}.ts`;
-    const filepath = join(__dirname, 'generated', filename);
+    const filepath = join(srcDir, 'generated', filename);
 
     await writeFile(filepath, solution.codeFragment.content);
 
@@ -95,7 +101,7 @@ async function main() {
 
   // 导出度量数据
   const metricsPath = join(
-    __dirname,
+    srcDir,
     'generated',
     'swarm-metrics-minimax.json'
   );
