@@ -1,0 +1,16 @@
+{
+  "name": "level-1-calculator",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test-swarm": "tsx run-swarm-calculator.ts",
+    "test-env-swarm": "tsx run-environment-swarm.ts"
+  },
+  "dependencies": {
+    "@tyranids/swarm-core": "*"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.9.2"
+  }
+}
