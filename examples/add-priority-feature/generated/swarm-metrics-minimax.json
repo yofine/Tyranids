@@ -1,0 +1,246 @@
+{
+  "startTime": 1770908010952,
+  "endTime": 1770908110996,
+  "duration": 100044,
+  "agentActions": {},
+  "pheromoneEvolution": [
+    {
+      "iteration": 3,
+      "topQuality": 1,
+      "avgQuality": 1,
+      "diversity": 1,
+      "convergence": 0.5,
+      "timestamp": 1770908030955
+    },
+    {
+      "iteration": 4,
+      "topQuality": 1,
+      "avgQuality": 1,
+      "diversity": 1,
+      "convergence": 0.3333333333333333,
+      "timestamp": 1770908035956
+    },
+    {
+      "iteration": 5,
+      "topQuality": 1,
+      "avgQuality": 1,
+      "diversity": 1,
+      "convergence": 0.25,
+      "timestamp": 1770908040956
+    },
+    {
+      "iteration": 6,
+      "topQuality": 1,
+      "avgQuality": 1,
+      "diversity": 1,
+      "convergence": 0.25,
+      "timestamp": 1770908045957
+    },
+    {
+      "iteration": 7,
+      "topQuality": 1,
+      "avgQuality": 1,
+      "diversity": 1,
+      "convergence": 0.25,
+      "timestamp": 1770908050958
+    },
+    {
+      "iteration": 8,
+      "topQuality": 1,
+      "avgQuality": 1,
+      "diversity": 1,
+      "convergence": 0.25,
+      "timestamp": 1770908055965
+    },
+    {
+      "iteration": 9,
+      "topQuality": 1,
+      "avgQuality": 1,
+      "diversity": 1,
+      "convergence": 0.25,
+      "timestamp": 1770908060966
+    },
+    {
+      "iteration": 10,
+      "topQuality": 1,
+      "avgQuality": 1,
+      "diversity": 1,
+      "convergence": 0.25,
+      "timestamp": 1770908065966
+    },
+    {
+      "iteration": 11,
+      "topQuality": 1,
+      "avgQuality": 0.9571428571428572,
+      "diversity": 0.9966400934390993,
+      "convergence": 0.25,
+      "timestamp": 1770908070966
+    },
+    {
+      "iteration": 12,
+      "topQuality": 1,
+      "avgQuality": 0.9571428571428572,
+      "diversity": 0.9966400934390993,
+      "convergence": 0.25,
+      "timestamp": 1770908075971
+    },
+    {
+      "iteration": 13,
+      "topQuality": 1,
+      "avgQuality": 0.9625,
+      "diversity": 0.9972126083852331,
+      "convergence": 0.25,
+      "timestamp": 1770908080977
+    },
+    {
+      "iteration": 14,
+      "topQuality": 1,
+      "avgQuality": 0.9299999999999999,
+      "diversity": 0.9944550584205839,
+      "convergence": 0.25,
+      "timestamp": 1770908085978
+    },
+    {
+      "iteration": 15,
+      "topQuality": 1,
+      "avgQuality": 0.8727272727272727,
+      "diversity": 0.9830793800009718,
+      "convergence": 0.2,
+      "timestamp": 1770908090979
+    },
+    {
+      "iteration": 16,
+      "topQuality": 1,
+      "avgQuality": 0.8727272727272727,
+      "diversity": 0.9830793800009718,
+      "convergence": 0.2,
+      "timestamp": 1770908095979
+    },
+    {
+      "iteration": 17,
+      "topQuality": 1,
+      "avgQuality": 0.8727272727272727,
+      "diversity": 0.9830793800009718,
+      "convergence": 0.2,
+      "timestamp": 1770908100986
+    },
+    {
+      "iteration": 18,
+      "topQuality": 1,
+      "avgQuality": 0.8727272727272727,
+      "diversity": 0.9830793800009718,
+      "convergence": 0.2,
+      "timestamp": 1770908105990
+    },
+    {
+      "iteration": 19,
+      "topQuality": 1,
+      "avgQuality": 0.8833333333333333,
+      "diversity": 0.9849051540897392,
+      "convergence": 0.2,
+      "timestamp": 1770908110996
+    }
+  ],
+  "llmCalls": {
+    "total": 0,
+    "byModel": {},
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "estimatedCost": 0
+  },
+  "solutions": [
+    {
+      "id": "agent-2-0",
+      "quality": 1,
+      "depositors": [
+        "agent-2"
+      ],
+      "compilationSuccess": true,
+      "timestamp": 1770908027994
+    },
+    {
+      "id": "agent-3-0",
+      "quality": 1,
+      "depositors": [
+        "agent-3"
+      ],
+      "compilationSuccess": true,
+      "timestamp": 1770908030591
+    },
+    {
+      "id": "agent-0-0",
+      "quality": 1,
+      "depositors": [
+        "agent-0"
+      ],
+      "compilationSuccess": true,
+      "timestamp": 1770908034920
+    },
+    {
+      "id": "agent-4-0",
+      "quality": 1,
+      "depositors": [
+        "agent-4"
+      ],
+      "compilationSuccess": true,
+      "timestamp": 1770908038811
+    },
+    {
+      "id": "agent-3-1",
+      "quality": 1,
+      "depositors": [
+        "agent-3"
+      ],
+      "compilationSuccess": true,
+      "timestamp": 1770908059348
+    },
+    {
+      "id": "agent-0-1",
+      "quality": 1,
+      "depositors": [
+        "agent-0"
+      ],
+      "compilationSuccess": true,
+      "timestamp": 1770908060746
+    },
+    {
+      "id": "agent-4-1",
+      "quality": 1,
+      "depositors": [
+        "agent-4"
+      ],
+      "compilationSuccess": true,
+      "timestamp": 1770908080181
+    },
+    {
+      "id": "agent-3-2",
+      "quality": 1,
+      "depositors": [
+        "agent-3"
+      ],
+      "compilationSuccess": true,
+      "timestamp": 1770908083671
+    },
+    {
+      "id": "agent-3-3",
+      "quality": 1,
+      "depositors": [
+        "agent-3"
+      ],
+      "compilationSuccess": true,
+      "timestamp": 1770908107563
+    },
+    {
+      "id": "agent-2-1",
+      "quality": 0.7,
+      "depositors": [
+        "agent-2"
+      ],
+      "compilationSuccess": true,
+      "timestamp": 1770908070895
+    }
+  ],
+  "convergenceDetected": false,
+  "convergenceIteration": -1,
+  "finalConvergenceRatio": 0
+}
