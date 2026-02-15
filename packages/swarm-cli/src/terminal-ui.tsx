@@ -1,8 +1,11 @@
 /**
  * TerminalUI - ink (React for CLI) rendering engine for Tyranids CLI
  *
- * Uses ink v6 (React for terminal) with proper handling of both
- * interactive TTY mode and piped stdin.
+ * Two modes:
+ * - TTY: Full ink (React for terminal) with interactive input, spinners,
+ *   live-updating swarm dashboard, and `<Static>` for persistent output.
+ * - Pipe: Plain console.log output with readline input. No ink — ANSI cursor
+ *   manipulation doesn't work in pipes so ink would just accumulate garbage.
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
@@ -18,27 +21,14 @@ import type {
   FileStatusSnapshot,
 } from './types.js';
 
-// ── State types ─────────────────────────────────────
+// ── Static item types ─────────────────────────────────
 
-interface AppState {
-  mode: UIMode;
-  processing: boolean;
-  events: SwarmEvent[];
-  messages: ChatMessage[];
-  workspaceInfo: WorkspaceInfo | null;
-  dashboard: SwarmDashboardState | null;
-  taskComplete: TaskCompleteInfo | null;
-  evolutionProposal: EvolutionProposalInfo | null;
-  skillsList: SkillInfo[] | null;
-  confirmQuestion: string | null;
-  showLogo: boolean;
-}
-
-interface ChatMessage {
-  id: number;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-}
+type StaticItem =
+  | { id: number; kind: 'logo' }
+  | { id: number; kind: 'message'; role: 'user' | 'assistant' | 'system'; content: string }
+  | { id: number; kind: 'task_complete'; info: TaskCompleteInfo }
+  | { id: number; kind: 'evolution_proposal'; proposal: EvolutionProposalInfo }
+  | { id: number; kind: 'skills_list'; skills: SkillInfo[] };
 
 interface TaskCompleteInfo {
   files: [string, string][];
@@ -60,11 +50,22 @@ interface SkillInfo {
   complexity: string;
 }
 
+// ── App state ─────────────────────────────────────────
+
+interface AppState {
+  mode: UIMode;
+  processing: boolean;
+  events: SwarmEvent[];
+  items: StaticItem[];
+  dashboard: SwarmDashboardState | null;
+  confirmQuestion: string | null;
+}
+
 type StateUpdater = (fn: (prev: AppState) => AppState) => void;
 
-let msgIdCounter = 0;
+let itemIdCounter = 0;
 
-// ── Helper Components ───────────────────────────────
+// ── Helper Components (ink only) ──────────────────────
 
 const LOGO_LINES = [
   '  ████████╗██╗   ██╗██████╗  █████╗ ███╗   ██╗██╗██████╗ ███████╗',
@@ -75,28 +76,16 @@ const LOGO_LINES = [
   '     ╚═╝      ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝╚═════╝ ╚══════╝',
 ];
 
-const TAGLINE = '  ◉ Swarm Intelligence CLI — Devour. Adapt. Evolve.';
+const TAGLINE = '  Swarm Intelligence CLI — Devour. Adapt. Evolve.';
 
-function Header({ info, showLogo }: { info: WorkspaceInfo | null; showLogo: boolean }) {
+function LogoView() {
   return (
     <Box flexDirection="column" marginBottom={1}>
-      {showLogo && (
-        <Box flexDirection="column">
-          {LOGO_LINES.map((line: string, i: number) => (
-            <Text key={i} color="red">{line}</Text>
-          ))}
-          <Text dimColor>{TAGLINE}</Text>
-          <Text> </Text>
-        </Box>
-      )}
-      {info && (
-        <Box flexDirection="column" paddingLeft={2}>
-          <Text dimColor>Workspace: {info.projectDir}</Text>
-          <Text dimColor>
-            Tasks: {info.totalTasks} | Skills: {info.totalSkills} | Evolution: gen-{info.evolutionGeneration}
-          </Text>
-        </Box>
-      )}
+      {LOGO_LINES.map((line: string, i: number) => (
+        <Text key={i} color="red">{line}</Text>
+      ))}
+      <Text dimColor>{TAGLINE}</Text>
+      <Text> </Text>
     </Box>
   );
 }
@@ -167,37 +156,8 @@ function formatEvent(event: SwarmEvent): { text: string; color: string } {
   }
 }
 
-function SwarmDashboard({ dashboard, events }: { dashboard: SwarmDashboardState | null; events: SwarmEvent[] }) {
-  return (
-    <Box flexDirection="column" marginY={1}>
-      {dashboard && (
-        <>
-          <Box gap={1}>
-            <Text bold color="yellow">[SWARM ACTIVE]</Text>
-            <Text>{dashboard.totalAgents} agents</Text>
-            <Text dimColor>|</Text>
-            <Text>Convergence: {formatPercent(dashboard.convergence)}</Text>
-            <Text dimColor>|</Text>
-            <Text>Skills: {dashboard.skillsLoaded}</Text>
-          </Box>
-          <Box flexDirection="column" marginTop={1} paddingLeft={1}>
-            {dashboard.files.map((f: FileStatusSnapshot) => (
-              <FileStatusRow key={f.filePath} file={f} />
-            ))}
-          </Box>
-        </>
-      )}
-      {events.length > 0 && (
-        <Box flexDirection="column" marginTop={1} paddingLeft={1}>
-          <Text dimColor>Recent events:</Text>
-          {events.slice(-8).map((evt: SwarmEvent, i: number) => {
-            const { text, color } = formatEvent(evt);
-            return <Text key={i} color={color}>  {text}</Text>;
-          })}
-        </Box>
-      )}
-    </Box>
-  );
+function formatEventPlain(event: SwarmEvent): string {
+  return formatEvent(event).text;
 }
 
 function TaskCompleteSummary({ info }: { info: TaskCompleteInfo }) {
@@ -236,7 +196,7 @@ function SkillsListView({ skills }: { skills: SkillInfo[] }) {
     return <Text dimColor>  No skills learned yet.</Text>;
   }
   return (
-    <Box flexDirection="column" marginY={1}>
+    <Box flexDirection="column">
       <Text bold>  Skills Library:</Text>
       {skills.map((s: SkillInfo) => {
         const compColor = s.complexity === 'high' ? 'red' : s.complexity === 'medium' ? 'yellow' : 'green';
@@ -252,20 +212,83 @@ function SkillsListView({ skills }: { skills: SkillInfo[] }) {
   );
 }
 
-// ── Main App Component ──────────────────────────────
+// ── Live swarm dashboard (re-renders in place) ─────────
+
+function SwarmDashboard({ dashboard, events }: { dashboard: SwarmDashboardState | null; events: SwarmEvent[] }) {
+  return (
+    <Box flexDirection="column" marginY={1}>
+      {dashboard && (
+        <>
+          <Box gap={1}>
+            <Text bold color="yellow">[SWARM ACTIVE]</Text>
+            <Text>{dashboard.totalAgents} agents</Text>
+            <Text dimColor>|</Text>
+            <Text>Convergence: {formatPercent(dashboard.convergence)}</Text>
+            <Text dimColor>|</Text>
+            <Text>Skills: {dashboard.skillsLoaded}</Text>
+          </Box>
+          <Box flexDirection="column" marginTop={1} paddingLeft={1}>
+            {dashboard.files.map((f: FileStatusSnapshot) => (
+              <FileStatusRow key={f.filePath} file={f} />
+            ))}
+          </Box>
+        </>
+      )}
+      {events.length > 0 && (
+        <Box flexDirection="column" marginTop={1} paddingLeft={1}>
+          <Text dimColor>Recent events:</Text>
+          {events.slice(-8).map((evt: SwarmEvent, i: number) => {
+            const { text, color } = formatEvent(evt);
+            return <Text key={i} color={color}>  {text}</Text>;
+          })}
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+// ── Static item renderer ────────────────────────────────
+
+function StaticItemView({ item }: { item: StaticItem }) {
+  switch (item.kind) {
+    case 'logo':
+      return <LogoView />;
+    case 'message':
+      return (
+        <Box paddingLeft={1} flexDirection="column">
+          {item.role === 'user' && <Text color="green">&gt; {item.content}</Text>}
+          {item.role === 'assistant' && (
+            <Box flexDirection="column">
+              <Text color="cyan">  Tyranids:</Text>
+              {item.content.split('\n').map((line: string, i: number) => (
+                <Text key={i}>  {line}</Text>
+              ))}
+            </Box>
+          )}
+          {item.role === 'system' && <Text dimColor>  {item.content}</Text>}
+        </Box>
+      );
+    case 'task_complete':
+      return <TaskCompleteSummary info={item.info} />;
+    case 'evolution_proposal':
+      return <EvolutionProposalView proposal={item.proposal} />;
+    case 'skills_list':
+      return <SkillsListView skills={item.skills} />;
+  }
+}
+
+// ── Main App Component (TTY only) ─────────────────────
 
 function App({
   stateRef,
   setStateRef,
   onInput,
   onConfirmResolve,
-  isTTY,
 }: {
   stateRef: React.MutableRefObject<AppState>;
   setStateRef: React.MutableRefObject<StateUpdater | null>;
   onInput: React.MutableRefObject<((input: string) => Promise<void> | void) | null>;
   onConfirmResolve: React.MutableRefObject<((yes: boolean) => void) | null>;
-  isTTY: boolean;
 }) {
   const [state, setState] = useState<AppState>(stateRef.current);
   const [inputValue, setInputValue] = useState('');
@@ -309,45 +332,23 @@ function App({
       exit();
       process.exit(0);
     }
-  }, { isActive: isTTY });
+  });
 
   return (
     <Box flexDirection="column">
-      <Header info={state.workspaceInfo} showLogo={state.showLogo} />
-
-      {/* Chat messages (Static = rendered once, persisted) */}
-      <Static items={state.messages}>
-        {(msg: ChatMessage) => (
-          <Box key={msg.id} paddingLeft={1} flexDirection="column">
-            {msg.role === 'user' && <Text color="green">&gt; {msg.content}</Text>}
-            {msg.role === 'assistant' && (
-              <Box flexDirection="column">
-                <Text color="cyan">  Tyranids:</Text>
-                {msg.content.split('\n').map((line: string, i: number) => (
-                  <Text key={i}>  {line}</Text>
-                ))}
-              </Box>
-            )}
-            {msg.role === 'system' && <Text dimColor>  [system] {msg.content}</Text>}
+      {/* Static items: logo, messages, summaries — rendered once, never reprinted */}
+      <Static items={state.items}>
+        {(item: StaticItem) => (
+          <Box key={item.id}>
+            <StaticItemView item={item} />
           </Box>
         )}
       </Static>
 
-      {/* Skills list */}
-      {state.skillsList && <SkillsListView skills={state.skillsList} />}
-
-      {/* Swarm dashboard */}
+      {/* Live swarm dashboard (re-renders in place) */}
       {state.mode === 'swarm' && (
         <SwarmDashboard dashboard={state.dashboard} events={state.events} />
       )}
-
-      {/* Evolution mode */}
-      {state.mode === 'evolution' && state.evolutionProposal && (
-        <EvolutionProposalView proposal={state.evolutionProposal} />
-      )}
-
-      {/* Task complete summary */}
-      {state.taskComplete && <TaskCompleteSummary info={state.taskComplete} />}
 
       {/* Processing spinner */}
       {state.processing && (
@@ -366,8 +367,8 @@ function App({
         </Box>
       )}
 
-      {/* Input prompt (only in TTY mode — pipe mode uses readline externally) */}
-      {isTTY && !state.processing && (
+      {/* Input prompt */}
+      {!state.processing && (
         <Box paddingLeft={1}>
           <Text color="green">&gt; </Text>
           <TextInput
@@ -381,7 +382,7 @@ function App({
   );
 }
 
-// ── TerminalUI class (imperative bridge) ────────────
+// ── TerminalUI class (imperative bridge) ─────────────────
 
 export class TerminalUI {
   private stateRef: { current: AppState };
@@ -400,70 +401,74 @@ export class TerminalUI {
         mode: 'chat',
         processing: false,
         events: [],
-        messages: [],
-        workspaceInfo: null,
+        items: [{ id: ++itemIdCounter, kind: 'logo' }],
         dashboard: null,
-        taskComplete: null,
-        evolutionProposal: null,
-        skillsList: null,
         confirmQuestion: null,
-        showLogo: true,
       },
     };
   }
 
-  // ── Lifecycle ──────────────────────────────────────
+  // ── Lifecycle ─────────────────────────────────────────
 
   start(): void {
-    // Render ink app
+    if (this.isTTY) {
+      this.startInk();
+    } else {
+      this.startPipe();
+    }
+  }
+
+  private startInk(): void {
     const element = React.createElement(App, {
       stateRef: this.stateRef,
       setStateRef: this.setStateRef,
       onInput: this.inputCallbackRef,
       onConfirmResolve: this.confirmResolveRef,
-      isTTY: this.isTTY,
     });
 
-    if (this.isTTY) {
-      this.inkInstance = render(element);
-    } else {
-      // Pipe mode: render in debug mode (no raw mode, append-only output)
-      this.inkInstance = render(element, { debug: true, patchConsole: false });
+    this.inkInstance = render(element, {
+      patchConsole: false,
+    });
+  }
+
+  private startPipe(): void {
+    // In pipe mode, print the logo immediately via console.log
+    for (const line of LOGO_LINES) {
+      console.log(line);
     }
+    console.log(TAGLINE);
+    console.log();
 
-    // For pipe mode, use readline for input
-    if (!this.isTTY) {
-      this.rl = createInterface({
-        input: process.stdin,
-        output: process.stdout,
-        prompt: '',
-      });
+    this.rl = createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      prompt: '',
+    });
 
-      this.rl.on('line', (line: string) => {
-        const input = line.trim();
-        if (!input) return;
+    this.rl.on('line', (line: string) => {
+      const input = line.trim();
+      if (!input) return;
 
-        if (this.inputCallbackRef.current) {
-          const work = (async () => {
-            try {
-              await this.inputCallbackRef.current!(input);
-            } catch {
-              // errors handled by callback
-            }
-          })();
-          this.pendingWork = work;
-        }
-      });
-
-      this.rl.on('close', () => {
-        setTimeout(async () => {
-          if (this.pendingWork) {
-            await this.pendingWork;
+      if (this.inputCallbackRef.current) {
+        const work = (async () => {
+          try {
+            await this.inputCallbackRef.current!(input);
+          } catch {
+            // errors handled by callback
           }
-          process.exit(0);
-        }, 100);
-      });
-    }
+        })();
+        this.pendingWork = work;
+      }
+    });
+
+    this.rl.on('close', () => {
+      setTimeout(async () => {
+        if (this.pendingWork) {
+          await this.pendingWork;
+        }
+        process.exit(0);
+      }, 100);
+    });
   }
 
   stop(): void {
@@ -477,7 +482,7 @@ export class TerminalUI {
     }
   }
 
-  // ── Input ──────────────────────────────────────────
+  // ── Input ─────────────────────────────────────────────
 
   onInput(callback: (input: string) => Promise<void> | void): void {
     this.inputCallbackRef.current = callback;
@@ -489,7 +494,6 @@ export class TerminalUI {
 
   async confirm(question: string): Promise<boolean> {
     if (!this.isTTY) {
-      // In pipe mode, default to yes
       return true;
     }
     return new Promise((resolve) => {
@@ -498,15 +502,12 @@ export class TerminalUI {
     });
   }
 
-  // ── Mode Switching ─────────────────────────────────
+  // ── Mode Switching ────────────────────────────────────
 
   switchToChat(): void {
     this.updateState(prev => ({
       ...prev,
       mode: 'chat',
-      taskComplete: null,
-      skillsList: null,
-      evolutionProposal: null,
     }));
   }
 
@@ -514,7 +515,6 @@ export class TerminalUI {
     this.updateState(prev => ({
       ...prev,
       mode: 'swarm',
-      taskComplete: null,
     }));
   }
 
@@ -525,39 +525,57 @@ export class TerminalUI {
     }));
   }
 
-  // ── Rendering ──────────────────────────────────────
+  // ── Rendering ─────────────────────────────────────────
 
   renderHeader(info: WorkspaceInfo): void {
-    this.updateState(prev => ({ ...prev, workspaceInfo: info }));
+    const lines = [
+      `Workspace: ${info.projectDir}`,
+      `Tasks: ${info.totalTasks} | Skills: ${info.totalSkills} | Evolution: gen-${info.evolutionGeneration}`,
+    ].join('\n');
+
+    if (this.isTTY) {
+      this.pushItem({ id: ++itemIdCounter, kind: 'message', role: 'system', content: lines });
+    } else {
+      console.log(lines);
+    }
   }
 
   printAssistantMessage(text: string): void {
-    this.updateState(prev => ({
-      ...prev,
-      processing: false,
-      messages: [...prev.messages, { id: ++msgIdCounter, role: 'assistant' as const, content: text }],
-    }));
+    if (this.isTTY) {
+      this.updateState(prev => ({
+        ...prev,
+        processing: false,
+        items: [...prev.items, { id: ++itemIdCounter, kind: 'message', role: 'assistant', content: text }],
+      }));
+    } else {
+      console.log(`Tyranids: ${text}`);
+    }
   }
 
   printSystemMessage(text: string): void {
-    this.updateState(prev => ({
-      ...prev,
-      messages: [...prev.messages, { id: ++msgIdCounter, role: 'system' as const, content: text }],
-    }));
+    if (this.isTTY) {
+      this.pushItem({ id: ++itemIdCounter, kind: 'message', role: 'system', content: text });
+    } else {
+      console.log(`[system] ${text}`);
+    }
   }
 
   setProcessing(active: boolean): void {
     this.updateState(prev => ({ ...prev, processing: active }));
   }
 
-  // ── Swarm Dashboard ────────────────────────────────
+  // ── Swarm Dashboard ───────────────────────────────────
 
   pushEvent(event: SwarmEvent): void {
-    this.updateState(prev => {
-      const events = [...prev.events, event].slice(-8);
-      const dashboard = this.updateDashboardFromEvent(prev.dashboard, event);
-      return { ...prev, events, dashboard };
-    });
+    if (this.isTTY) {
+      this.updateState(prev => {
+        const events = [...prev.events, event].slice(-8);
+        const dashboard = this.updateDashboardFromEvent(prev.dashboard, event);
+        return { ...prev, events, dashboard };
+      });
+    } else {
+      console.log(formatEventPlain(event));
+    }
   }
 
   renderSwarmDashboard(state: SwarmDashboardState): void {
@@ -570,22 +588,44 @@ export class TerminalUI {
     duration: number,
     skillsLearned: string[],
   ): void {
-    this.updateState(prev => ({
-      ...prev,
-      taskComplete: {
-        files: [...files.entries()],
-        convergence,
-        duration,
-        skillsLearned,
-      },
-    }));
+    if (this.isTTY) {
+      this.pushItem({
+        id: ++itemIdCounter,
+        kind: 'task_complete',
+        info: {
+          files: [...files.entries()],
+          convergence,
+          duration,
+          skillsLearned,
+        },
+      });
+    } else {
+      console.log(`--- Task Complete ---`);
+      console.log(`  Files: ${files.size}`);
+      console.log(`  Convergence: ${formatPercent(convergence)}`);
+      console.log(`  Duration: ${(duration / 1000).toFixed(1)}s`);
+      if (skillsLearned.length > 0) {
+        console.log(`  Skills learned: ${skillsLearned.join(', ')}`);
+      }
+      for (const [path, code] of files) {
+        console.log(`  ${path} (${code.split('\n').length} lines)`);
+      }
+    }
   }
 
   renderSkillsList(skills: { name: string; category: string; complexity: string }[]): void {
-    this.updateState(prev => ({
-      ...prev,
-      skillsList: skills,
-    }));
+    if (this.isTTY) {
+      this.pushItem({ id: ++itemIdCounter, kind: 'skills_list', skills });
+    } else {
+      if (skills.length === 0) {
+        console.log('No skills learned yet.');
+      } else {
+        console.log('Skills Library:');
+        for (const s of skills) {
+          console.log(`  ${s.name} [${s.category}] ${s.complexity}`);
+        }
+      }
+    }
   }
 
   renderWorkspaceStatus(info: WorkspaceInfo): void {
@@ -608,19 +648,30 @@ export class TerminalUI {
     reasoning: string;
     patchCount: number;
   }): void {
-    this.updateState(prev => ({
-      ...prev,
-      evolutionProposal: proposal,
-    }));
+    if (this.isTTY) {
+      this.pushItem({ id: ++itemIdCounter, kind: 'evolution_proposal', proposal });
+    } else {
+      console.log(`Evolution Proposal:`);
+      console.log(`  Description: ${proposal.description}`);
+      console.log(`  Impact: ${proposal.estimatedImpact}`);
+      console.log(`  Reasoning: ${proposal.reasoning}`);
+      console.log(`  Patches: ${proposal.patchCount}`);
+    }
   }
 
-  // ── Private ────────────────────────────────────────
+  // ── Private ───────────────────────────────────────────
+
+  private pushItem(item: StaticItem): void {
+    this.updateState(prev => ({
+      ...prev,
+      items: [...prev.items, item],
+    }));
+  }
 
   private updateState(fn: (prev: AppState) => AppState): void {
     if (this.setStateRef.current) {
       this.setStateRef.current(fn);
     } else {
-      // Before React mounts, update the ref directly
       this.stateRef.current = fn(this.stateRef.current);
     }
   }
