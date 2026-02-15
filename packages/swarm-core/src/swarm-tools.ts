@@ -12,9 +12,30 @@
  */
 
 import { Type, type Tool } from '@mariozechner/pi-ai';
+import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import type { SwarmEnvironment } from './environment.js';
 import type { CompileFunction, SubmitResult, CompileResult } from './types.js';
 import type { SynapticMemory } from './synaptic-memory.js';
+
+/**
+ * Wrap a pi-ai Tool + handler into a pi-agent-core AgentTool.
+ * The AgentTool includes an `execute()` function so the Agent framework
+ * can dispatch tool calls automatically without a manual switch statement.
+ */
+function toAgentTool(
+  tool: Tool,
+  label: string,
+  handler: (args: any) => Promise<string>,
+): AgentTool {
+  return {
+    ...tool,
+    label,
+    execute: async (_toolCallId: string, params: any): Promise<AgentToolResult<unknown>> => {
+      const text = await handler(params);
+      return { content: [{ type: 'text', text }], details: {} };
+    },
+  };
+}
 
 /**
  * Handler functions for executing tool calls.
@@ -43,7 +64,7 @@ export function createSwarmTools(
   compileFn: CompileFunction,
   agentId: string,
   memory?: SynapticMemory
-): { tools: Tool[]; handlers: SwarmToolHandlers } {
+): { tools: Tool[]; agentTools: AgentTool[]; handlers: SwarmToolHandlers } {
 
   // --- Tool definitions ---
 
@@ -343,5 +364,15 @@ export function createSwarmTools(
     leaveTrailMarkerTool,
   ];
 
-  return { tools, handlers };
+  const agentTools: AgentTool[] = [
+    toAgentTool(perceiveEnvironmentTool, 'Perceive Environment', handlers.perceive_environment),
+    toAgentTool(readFileSolutionTool, 'Read File Solution', handlers.read_file_solution),
+    toAgentTool(submitSolutionTool, 'Submit Solution', handlers.submit_solution),
+    toAgentTool(compileCheckTool, 'Compile Check', handlers.compile_check),
+    toAgentTool(readSignalsTool, 'Read Signals', handlers.read_signals),
+    toAgentTool(readTrailMarkersTool, 'Read Trail Markers', handlers.read_trail_markers),
+    toAgentTool(leaveTrailMarkerTool, 'Leave Trail Marker', handlers.leave_trail_marker),
+  ];
+
+  return { tools, agentTools, handlers };
 }

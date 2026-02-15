@@ -1,30 +1,27 @@
 /**
- * EnvironmentAgent - Autonomous agent using tool calling
+ * EnvironmentAgent - Autonomous agent using Pi Agent framework
  *
- * Each iteration = one multi-turn LLM conversation with tool calls.
+ * Each iteration = one agent.prompt() call that runs the full tool-calling loop.
+ * The Pi Agent framework (pi-agent-core) handles:
+ * - Tool dispatch (via AgentTool.execute())
+ * - Multi-turn conversation management
+ * - Streaming and cancellation (AbortSignal)
+ *
  * Synaptic memory is injected at the start of each iteration so the agent
- * can learn from its own past attempts. Context is still fresh per iteration,
+ * can learn from its own past attempts. Context is fresh per iteration,
  * but the markdown-based memory persists across iterations (and crashes).
  *
  * The agent perceives the environment through tools, decides which file
- * to work on, reads dependencies, generates code, and submits solutions.
+ * to work on, reads dependencies, generates content, and submits solutions.
  * No central coordinator tells it what to do.
  */
 
-import {
-  complete,
-  type Context,
-  type Model,
-  type Api,
-  type Tool,
-  type ToolCall,
-  type ToolResultMessage,
-  type Message,
-} from '@mariozechner/pi-ai';
+import { Agent, type AgentEvent, type AgentTool } from '@mariozechner/pi-agent-core';
+import type { Message, Model, Api } from '@mariozechner/pi-ai';
 import type { SwarmEnvironment } from './environment.js';
 import type { CompileFunction } from './types.js';
-import { createSwarmTools, type SwarmToolHandlers } from './swarm-tools.js';
-import type { SynapticMemory, SynapticEntry } from './synaptic-memory.js';
+import { createSwarmTools } from './swarm-tools.js';
+import type { SynapticMemory } from './synaptic-memory.js';
 
 export interface EnvironmentAgentConfig {
   id: string;
@@ -79,13 +76,22 @@ export class EnvironmentAgent {
   private environment: SwarmEnvironment;
   private model: Model<Api>;
   private maxIterations: number;
-  private tools: Tool[];
-  private handlers: SwarmToolHandlers;
+  private agentTools: AgentTool[];
   private memory: SynapticMemory | null;
   private systemPrompt: string;
+  private piAgent: Agent;
   private shouldStop: boolean = false;
   private iterationsCompleted: number = 0;
   private successfulSubmits: number = 0;
+
+  // Tracked per-iteration via event subscription
+  private lastTargetFile: string = '';
+  private lastQuality: number | null = null;
+  private lastCompilationSuccess: boolean | null = null;
+  private lastCompilationErrors: string[] = [];
+  private lastAction: 'explore' | 'submit' | 'compile_check' = 'explore';
+  // Track tool args from start events (tool_execution_end doesn't include args)
+  private pendingToolArgs: Map<string, Record<string, unknown>> = new Map();
 
   constructor(config: EnvironmentAgentConfig) {
     this.id = config.id;
@@ -95,14 +101,32 @@ export class EnvironmentAgent {
     this.memory = config.memory ?? null;
     this.systemPrompt = config.systemPrompt ?? buildDefaultSystemPrompt();
 
-    const { tools, handlers } = createSwarmTools(
+    const { agentTools } = createSwarmTools(
       config.environment,
       config.compileFn,
       config.id,
       config.memory
     );
-    this.tools = tools;
-    this.handlers = handlers;
+    this.agentTools = agentTools;
+
+    // Create the Pi Agent instance
+    this.piAgent = new Agent({
+      initialState: {
+        systemPrompt: this.systemPrompt,
+        model: this.model,
+        tools: this.agentTools,
+      },
+      convertToLlm: (messages) =>
+        messages.filter(
+          (m): m is Message =>
+            m.role === 'user' || m.role === 'assistant' || m.role === 'toolResult'
+        ),
+    });
+
+    // Subscribe to events for tracking metrics
+    this.piAgent.subscribe((event: AgentEvent) => {
+      this.handleAgentEvent(event);
+    });
   }
 
   /**
@@ -138,9 +162,16 @@ export class EnvironmentAgent {
   }
 
   /**
-   * Execute a single iteration: one fresh multi-turn LLM conversation with tool calls
+   * Execute a single iteration: one agent.prompt() call with automatic tool execution
    */
   private async executeIteration(iterationNum: number): Promise<void> {
+    // Reset per-iteration tracking
+    this.lastTargetFile = '';
+    this.lastQuality = null;
+    this.lastCompilationSuccess = null;
+    this.lastCompilationErrors = [];
+    this.lastAction = 'explore';
+
     // 1. Read synaptic memory (agent's own past iterations)
     let memoryBlock = '';
     if (this.memory) {
@@ -154,165 +185,114 @@ export class EnvironmentAgent {
       userContent += `\n\n--- SYNAPTIC MEMORY (your past iterations) ---\n${memoryBlock}\n--- END MEMORY ---\n\nUse this memory to avoid repeating failed approaches. You can also use read_trail_markers to see what other agents tried.`;
     }
 
-    const context: Context = {
-      systemPrompt: this.systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: userContent,
-          timestamp: Date.now(),
-        } as Message,
-      ],
-      tools: this.tools,
-    };
+    // 3. Clear previous messages and run the agent loop
+    this.piAgent.clearMessages();
+    await this.piAgent.prompt(userContent);
 
-    let response = await complete(this.model, context);
-    context.messages.push(response);
-
-    let toolCallCount = 0;
-    const maxToolCalls = 20; // Safety limit per iteration
-
-    // Track what happened this iteration for memory recording
-    let lastTargetFile = '';
-    let lastQuality: number | null = null;
-    let lastCompilationSuccess: boolean | null = null;
-    let lastCompilationErrors: string[] = [];
-    let lastAction: SynapticEntry['action'] = 'explore';
-    while (response.stopReason === 'toolUse' && toolCallCount < maxToolCalls) {
-      // Process all tool calls in this response
-      for (const item of response.content) {
-        if (item.type === 'toolCall') {
-          const toolCall = item as ToolCall;
-          const result = await this.executeToolCall(toolCall);
-          context.messages.push(result);
-          toolCallCount++;
-
-          // Track what happened for memory
-          const toolArgs = toolCall.arguments as Record<string, any>;
-          if (toolCall.name === 'submit_solution' || toolCall.name === 'compile_check') {
-            lastTargetFile = toolArgs?.file_path ?? '';
-            lastAction = toolCall.name === 'submit_solution' ? 'submit' : 'compile_check';
-
-            try {
-              const parsed = JSON.parse(
-                (result.content[0] as { type: 'text'; text: string }).text
-              );
-              if (toolCall.name === 'submit_solution') {
-                lastQuality = parsed.quality ?? null;
-                lastCompilationSuccess = parsed.compilationSuccess ?? null;
-                lastCompilationErrors = parsed.errors ?? [];
-                if (parsed.compilationSuccess || parsed.quality >= 0.5) {
-                  this.successfulSubmits++;
-                }
-              } else {
-                lastCompilationSuccess = parsed.success ?? null;
-                lastCompilationErrors = parsed.errors ?? [];
-              }
-            } catch {
-              // Ignore parse errors
-            }
-          }
-        }
+    // 4. Record this iteration to synaptic memory
+    if (this.memory && this.lastTargetFile) {
+      // Extract a brief approach description from the agent's final text
+      const messages = this.piAgent.state.messages;
+      const lastMsg = messages[messages.length - 1];
+      let textParts = '';
+      if (lastMsg && lastMsg.role === 'assistant' && 'content' in lastMsg) {
+        const content = lastMsg.content as Array<{ type: string; text?: string }>;
+        textParts = content
+          .filter((c) => c.type === 'text' && c.text)
+          .map((c) => c.text!)
+          .join('');
       }
 
-      // Continue the conversation
-      response = await complete(this.model, context);
-      context.messages.push(response);
-    }
-
-    // 3. Record this iteration to synaptic memory
-    if (this.memory && lastTargetFile) {
-      // Extract a brief approach description from the agent's last text
-      const textParts = response.content
-        .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
-        .map(c => c.text)
-        .join('');
       const approach = textParts.length > 100
         ? textParts.substring(0, 100) + '...'
         : textParts || 'No text summary';
 
-      const outcome = lastQuality !== null
-        ? `quality=${lastQuality.toFixed(2)}, ${lastCompilationSuccess ? 'compiled' : 'compilation failed'}`
-        : 'no submission';
+      let outcome = 'no submission';
+      if (this.lastQuality !== null) {
+        outcome = `quality=${Number(this.lastQuality).toFixed(2)}, ${this.lastCompilationSuccess ? 'compiled' : 'compilation failed'}`;
+      }
 
       this.memory.appendSynapticEntry(this.id, {
         iteration: iterationNum,
         timestamp: Date.now(),
-        targetFile: lastTargetFile,
-        action: lastAction,
-        quality: lastQuality,
-        compilationSuccess: lastCompilationSuccess,
-        compilationErrors: lastCompilationErrors.slice(0, 3),
+        targetFile: this.lastTargetFile,
+        action: this.lastAction,
+        quality: this.lastQuality,
+        compilationSuccess: this.lastCompilationSuccess,
+        compilationErrors: this.lastCompilationErrors.slice(0, 3),
         approach,
         outcome,
       });
     }
 
-    // Log iteration summary
-    const textContent = response.content
-      .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
-      .map(c => c.text)
-      .join('');
+    // 5. Log iteration summary
+    const messages = this.piAgent.state.messages;
+    const lastMsg = messages[messages.length - 1];
+    let textContent = '';
+    if (lastMsg && lastMsg.role === 'assistant' && 'content' in lastMsg) {
+      const content = lastMsg.content as Array<{ type: string; text?: string }>;
+      textContent = content
+        .filter((c) => c.type === 'text' && c.text)
+        .map((c) => c.text!)
+        .join('');
+    }
 
     if (textContent) {
-      // Truncate long messages for logging
       const summary = textContent.length > 200
         ? textContent.substring(0, 200) + '...'
         : textContent;
       console.log(`[${this.id}] Iteration ${iterationNum}: ${summary.replace(/\n/g, ' ')}`);
     } else {
-      console.log(`[${this.id}] Iteration ${iterationNum}: completed (${toolCallCount} tool calls)`);
+      console.log(`[${this.id}] Iteration ${iterationNum}: completed`);
     }
   }
 
   /**
-   * Execute a single tool call and return the result message
+   * Handle events from the Pi Agent framework to track metrics
    */
-  private async executeToolCall(toolCall: ToolCall): Promise<ToolResultMessage> {
-    const { name, arguments: args, id } = toolCall;
-    let resultText: string;
-    let isError = false;
-
-    try {
-      switch (name) {
-        case 'perceive_environment':
-          resultText = await this.handlers.perceive_environment(args as any);
-          break;
-        case 'read_file_solution':
-          resultText = await this.handlers.read_file_solution(args as any);
-          break;
-        case 'submit_solution':
-          resultText = await this.handlers.submit_solution(args as any);
-          break;
-        case 'compile_check':
-          resultText = await this.handlers.compile_check(args as any);
-          break;
-        case 'read_signals':
-          resultText = await this.handlers.read_signals(args as any);
-          break;
-        case 'read_trail_markers':
-          resultText = await this.handlers.read_trail_markers(args as any);
-          break;
-        case 'leave_trail_marker':
-          resultText = await this.handlers.leave_trail_marker(args as any);
-          break;
-        default:
-          resultText = JSON.stringify({ error: `Unknown tool: ${name}` });
-          isError = true;
-      }
-    } catch (error: any) {
-      resultText = JSON.stringify({ error: error.message || 'Tool execution failed' });
-      isError = true;
+  private handleAgentEvent(event: AgentEvent): void {
+    // Track tool args from start events (end events don't include args)
+    if (event.type === 'tool_execution_start') {
+      this.pendingToolArgs.set(event.toolCallId, event.args as Record<string, unknown>);
+      return;
     }
 
-    return {
-      role: 'toolResult',
-      toolCallId: id,
-      toolName: name,
-      content: [{ type: 'text', text: resultText }],
-      isError,
-      timestamp: Date.now(),
-    };
+    if (event.type === 'tool_execution_end') {
+      const { toolCallId, toolName, result, isError } = event;
+      const args = this.pendingToolArgs.get(toolCallId) ?? {};
+      this.pendingToolArgs.delete(toolCallId);
+
+      if (isError) return;
+
+      if (toolName === 'submit_solution' || toolName === 'compile_check') {
+        try {
+          const resultContent = result as { content: Array<{ type: string; text: string }>; details: unknown };
+          const textItem = resultContent.content.find((c) => c.type === 'text');
+          if (!textItem) return;
+
+          const parsed = JSON.parse(textItem.text);
+          const filePath = String(args.file_path ?? '');
+
+          if (toolName === 'submit_solution') {
+            this.lastTargetFile = filePath;
+            this.lastAction = 'submit';
+            this.lastQuality = parsed.quality ?? null;
+            this.lastCompilationSuccess = parsed.compilationSuccess ?? null;
+            this.lastCompilationErrors = parsed.errors ?? [];
+            if (parsed.compilationSuccess || parsed.quality >= 0.5) {
+              this.successfulSubmits++;
+            }
+          } else {
+            this.lastTargetFile = filePath;
+            this.lastAction = 'compile_check';
+            this.lastCompilationSuccess = parsed.success ?? null;
+            this.lastCompilationErrors = parsed.errors ?? [];
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      }
+    }
   }
 
   /**
@@ -320,6 +300,7 @@ export class EnvironmentAgent {
    */
   stop(): void {
     this.shouldStop = true;
+    this.piAgent.abort();
   }
 
   /**

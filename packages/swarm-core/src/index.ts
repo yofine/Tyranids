@@ -32,6 +32,7 @@ export * from './bioengine/index.js';
 export { SwarmEnvironment } from './environment.js';
 export { createSwarmTools } from './swarm-tools.js';
 export { EnvironmentAgent, type EnvironmentAgentConfig } from './environment-agent.js';
+export type { AgentTool } from '@mariozechner/pi-agent-core';
 export {
   EnvironmentOrchestrator,
   type EnvironmentOrchestratorConfig,
